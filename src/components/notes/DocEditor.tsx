@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { Heading } from '@tiptap/extension-heading';
+import { textblockTypeInputRule } from '@tiptap/core';
 import { Placeholder } from '@tiptap/extensions';
 import { ImagePlus } from 'lucide-react';
 import { MediaImage } from '@/components/notes/MediaImage';
@@ -49,8 +51,9 @@ export function DocEditor({
       extensions: [
         StarterKit.configure({
           // A note must not out-rank the page's own h1, so the ladder starts at 2.
-          heading: { levels: [2, 3] },
+          heading: false,
         }),
+        ShiftedHeading,
         Placeholder.configure({
           // The one string that survived lib/notes.ts.
           placeholder: 'Start typing…',
@@ -147,3 +150,23 @@ function safeParse(content: string): object {
     return { type: 'doc', content: [{ type: 'paragraph' }] };
   }
 }
+
+
+/**
+ * A TipTap extension that decreases the heading level automatically by one.
+ */
+const ShiftedHeading = Heading.extend({
+  addInputRules() {
+    return [
+      textblockTypeInputRule({
+        find: /^(#{1,2})\s$/,
+        type: this.type,
+        getAttributes: (match) => ({
+          level: match[1].length + 1,
+        }),
+      }),
+    ];
+  },
+}).configure({
+  levels: [2, 3],
+});
