@@ -51,7 +51,7 @@ export function DocEditor({
       editable,
       extensions: [
         StarterKit.configure({
-          // A note must not out-rank the page's own h1, so the ladder starts at 2.
+          // Replaced wholesale by ShiftedHeading below.
           heading: false,
         }),
         ShiftedHeading,
@@ -156,18 +156,25 @@ function safeParse(content: string): object {
   }
 }
 
-
 /**
- * A TipTap extension that decreases the heading level automatically by one.
+ * Heading, with the markdown ladder shifted down one rung.
+ *
+ * A note must not out-rank the page's own h1, so the levels stop at 2 and 3.
+ * StarterKit's own rule maps hashes to levels literally, which meant "# " typed
+ * nothing at all and cost every writer the same confused minute.
+ *
+ * So one hash is an h2 and two are an h3. Three clamps to h3 rather than falling
+ * through as literal "### " text: there is no h4 to give, and silently swallowing
+ * the keystrokes is the very failure this extension exists to fix.
  */
 const ShiftedHeading = Heading.extend({
   addInputRules() {
     return [
       textblockTypeInputRule({
-        find: /^(#{1,2})\s$/,
+        find: /^(#{1,3})\s$/,
         type: this.type,
         getAttributes: (match) => ({
-          level: match[1].length + 1,
+          level: Math.min(match[1].length + 1, 3),
         }),
       }),
     ];
