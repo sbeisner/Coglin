@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { textblockTypeInputRule } from '@tiptap/core';
+import { Heading } from '@tiptap/extension-heading';
+import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Placeholder } from '@tiptap/extensions';
 import { ImagePlus } from 'lucide-react';
 import { MediaImage } from '@/components/notes/MediaImage';
@@ -48,14 +51,19 @@ export function DocEditor({
       editable,
       extensions: [
         StarterKit.configure({
-          // A note must not out-rank the page's own h1, so the ladder starts at 2.
-          heading: { levels: [2, 3] },
+          // Replaced wholesale by ShiftedHeading below.
+          heading: false,
         }),
+        ShiftedHeading,
         Placeholder.configure({
           // The one string that survived lib/notes.ts.
           placeholder: 'Start typing…',
         }),
         MediaImage,
+        TaskList,
+        TaskItem.configure({
+          nested: true,
+        }),
       ],
       content: safeParse(initialContent),
       editorProps: {
@@ -147,3 +155,30 @@ function safeParse(content: string): object {
     return { type: 'doc', content: [{ type: 'paragraph' }] };
   }
 }
+
+/**
+ * Heading, with the markdown ladder shifted down one rung.
+ *
+ * A note must not out-rank the page's own h1, so the levels stop at 2 and 3.
+ * StarterKit's own rule maps hashes to levels literally, which meant "# " typed
+ * nothing at all and cost every writer the same confused minute.
+ *
+ * So one hash is an h2 and two are an h3. Three clamps to h3 rather than falling
+ * through as literal "### " text: there is no h4 to give, and silently swallowing
+ * the keystrokes is the very failure this extension exists to fix.
+ */
+const ShiftedHeading = Heading.extend({
+  addInputRules() {
+    return [
+      textblockTypeInputRule({
+        find: /^(#{1,3})\s$/,
+        type: this.type,
+        getAttributes: (match) => ({
+          level: Math.min(match[1].length + 1, 3),
+        }),
+      }),
+    ];
+  },
+}).configure({
+  levels: [2, 3],
+});

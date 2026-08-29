@@ -508,6 +508,51 @@
       height: 0;
       pointer-events: none;
     }
+
+    /* Task lists lay the checkbox beside its text instead of above it, and opt
+       out of the marker and indent the generic list rules give every other ul.
+       Plain selectors, not the :where() the rest of this block uses: these have
+       to out-rank those rules, which is the whole point of them. */
+    ul[data-type='taskList'] {
+      list-style: none;
+      padding-inline-start: 0;
+      margin-block: 0.5rem;
+    }
+
+    ul[data-type='taskList'] > li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      margin-block: 0.25rem;
+    }
+
+    ul[data-type='taskList'] > li > label {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      margin: 0;
+    }
+
+    /* accent-primary rather than the browser's default blue, which belongs to no
+       palette this app owns. */
+    ul[data-type='taskList'] input[type='checkbox'] {
+      @apply accent-primary;
+      flex: 0 0 auto;
+      width: 1rem;
+      height: 1rem;
+      margin: 0.125rem 0 0;
+    }
+
+    /* TaskItem wraps its content in a div; it carries the wrap, so a long task
+       stays aligned beside the checkbox rather than sliding under it. */
+    ul[data-type='taskList'] > li > div {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    ul[data-type='taskList'] > li > div > p {
+      margin-block: 0;
+    }
   }
 }
 
