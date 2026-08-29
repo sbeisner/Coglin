@@ -509,6 +509,52 @@
       pointer-events: none;
     }
   }
+  /* Fixing Tasklists not rendering properly (without this, the text renders on the line underneath the checkbox*/
+  .note-prose ul[data-type="taskList"] {
+    list-style: none !important;
+    padding-inline-start: 0 !important;
+    margin-block: 0.5rem !important;
+  }
+
+  .note-prose ul[data-type="taskList"] > li {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+
+    list-style: none !important;
+    padding-inline-start: 0 !important;
+    margin-block: 0.25rem !important;
+  }
+
+  .note-prose ul[data-type="taskList"] > li > label {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .note-prose ul[data-type="taskList"]
+    > li
+    > label
+    > input[type="checkbox"] {
+    display: block !important;
+    width: 1rem !important;
+    height: 1rem !important;
+    margin: 0.125rem 0 0 !important;
+    flex: 0 0 auto !important;
+  }
+
+  .note-prose ul[data-type="taskList"] > li > div {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  .note-prose ul[data-type="taskList"] > li > div > p {
+    margin: 0 !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

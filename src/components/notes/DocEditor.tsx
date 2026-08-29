@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions';
 import { ImagePlus } from 'lucide-react';
 import { MediaImage } from '@/components/notes/MediaImage';
@@ -56,6 +57,10 @@ export function DocEditor({
           placeholder: 'Start typing…',
         }),
         MediaImage,
+        TaskList,
+        TaskItem.configure({
+          nested: true,
+        }),
       ],
       content: safeParse(initialContent),
       editorProps: {
