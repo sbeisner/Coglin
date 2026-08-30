@@ -45,9 +45,9 @@ export const PAGES: PageMeta[] = [
   },
   {
     path: '/awards',
-    title: 'FTC awards, and what produces the evidence — Coglin',
+    title: 'FTC award criteria, and where the evidence comes from — Coglin',
     description:
-      'Inspire, Think, Connect, Reach, Sustain, Control, Innovate and Design: what each award asks a team to document, and which part of Coglin produces it.',
+      'Inspire, Think, Connect, Reach, Sustain, Control, Innovate and Design: what the Competition Manual asks each team to document, and which part of Coglin keeps it.',
     changefreq: 'monthly',
     priority: '0.9',
   },

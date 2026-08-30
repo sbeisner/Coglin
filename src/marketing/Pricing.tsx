@@ -268,10 +268,21 @@ export default function Pricing() {
       </Wrap>
 
       <Section title="Why not just use Trello?">
+        {/* This paragraph claimed Coglin knows "what a judge is going to ask for
+            in March". It does not, and nothing in the product tries to. It is an
+            organisational tool: what it knows is the shape of a season. Selling
+            judging insight would be selling something that does not exist. */}
         <p className="text-muted-foreground mb-5 max-w-2xl text-sm leading-relaxed">
-          You can, and plenty of teams do — general project tools handle boards
-          perfectly well, and the table says so. What they cannot do is know what a
-          judge is going to ask for in March. That is what you are paying for.
+          You can, and plenty of teams do. Generic project tools handle boards
+          perfectly well, and the table says so.
+        </p>
+        <p className="text-muted-foreground mb-5 max-w-2xl text-sm leading-relaxed">
+          What they have no notion of is a season. Coglin already knows a team has
+          sub-teams, a roster of students whose accounts a coach has to control,
+          meetings two or three times a week, an outreach log, sponsors and a
+          portfolio. In Trello that is a structure you invent in September, explain
+          to fifteen people, and maintain by hand until it drifts. Here it is the
+          shape of the product.
         </p>
         <FitMatrix />
       </Section>

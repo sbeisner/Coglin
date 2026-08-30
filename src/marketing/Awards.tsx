@@ -78,7 +78,7 @@ export default function Awards() {
     <>
       <PageIntro
         eyebrow="Awards"
-        title="What judges ask for, and what produces it"
+        title="What each award asks you to document"
         lede={
           <>
             Taken from Competition Manual §6 and the Judging Process Guide. The
