@@ -39,8 +39,35 @@ Same Stripe account as Inkubus. Toggle to **test mode** first (top right).
       season the catalog is fifty identical rows and revenue-by-product tells
       you nothing. Two minutes now, or a messy catalog later.
 
-- [ ] Developers → API keys → copy the **Secret key** (`sk_test_…`). This is the
-      same key Inkubus uses; you do not need a second one.
+- [ ] Developers → API keys → **Create restricted key**. Prefer this over the
+      account secret key, which is what an earlier version of this runbook said
+      to reuse from Inkubus.
+
+      The whole codebase makes exactly ONE Stripe API call —
+      `checkout.sessions.create`. Signature verification is local HMAC and
+      touches no API, and both webhook handlers read the event payload and write
+      to D1. So the key needs almost nothing:
+
+      | Resource | Permission | Why |
+      |---|---|---|
+      | Checkout Sessions | **Write** | The one call the code makes |
+      | Products | **Read** | `price_data.product` references `STRIPE_PRODUCT_ID` and Stripe resolves it |
+
+      Everything else: **None**.
+
+      This matters because `/api/billing/checkout` is the app's only public,
+      unauthenticated endpoint. With a full account key, a leak means refunds,
+      payouts, customer data and Inkubus's subscriptions. With this one it means
+      somebody can create checkout sessions, which is what the endpoint already
+      does for anyone who asks.
+
+      Restricted keys start `rk_test_…` / `rk_live_…` and drop in wherever an
+      `sk_` would; no code change. They are mode-specific like everything else
+      here, so live mode needs its own.
+
+      If a scope turns out to be missing, Stripe says so explicitly —
+      "This API key does not have the required permissions" naming the resource
+      — rather than failing quietly. Add it and re-run the curl in §3.
 
 ## 2. Webhook endpoint
 
@@ -64,7 +91,7 @@ secret will not verify anything sent here.
 
 ```bash
 cd ~/lilithforge/coglin && nvm use
-npx wrangler secret put STRIPE_SECRET_KEY --env production      # sk_test_…
+npx wrangler secret put STRIPE_SECRET_KEY --env production      # rk_test_… or sk_test_…
 npx wrangler secret put STRIPE_WEBHOOK_SECRET --env production  # whsec_…
 ```
 
