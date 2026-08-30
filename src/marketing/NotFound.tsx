@@ -17,7 +17,7 @@ export default function NotFound() {
         Coglin has nothing at this address.
       </h1>
       <p className="text-muted-foreground mt-4 max-w-xl leading-relaxed">
-        The link may be old, or we may have moved the page. The app now lives under{' '}
+        Either the link is old or we moved the page. The app itself now lives under{' '}
         <code className="font-mono text-sm">/app</code>.
       </p>
       <div className="mt-8 flex flex-wrap gap-3">

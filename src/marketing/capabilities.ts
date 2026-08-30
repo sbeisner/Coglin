@@ -73,7 +73,7 @@ export const CAPABILITIES: Capability[] = [
     docs: 'no',
     inMatrix: true,
     detail:
-      'Kanban for build, programming, CAD, outreach and business, with assignees and due dates. This is the part a general project tool already does well, and Coglin does not pretend otherwise — it is here so the rest of the season can hang off it.',
+      "Kanban boards per sub-team, with assignees and due dates. Trello does this perfectly well and we're not going to pretend otherwise. It's here because the rest of the season needs something to hang off.",
     awards: [],
   },
   {
@@ -85,7 +85,7 @@ export const CAPABILITIES: Capability[] = [
     docs: 'partial',
     inMatrix: true,
     detail:
-      'Recurring meeting schedules, agendas, and rich notes that nest into documents. Attendance is one dropdown per person, because four controls per row on a phone in a cold shop means the roll never gets taken. With the engineering notebook now optional, this archive is the supplementary documentation judges ask about.',
+      "Recurring schedules, agendas, and notes that nest into documents. Attendance is one dropdown per person, because four controls per row on a phone in a cold shop means the roll never actually gets taken. Now that the engineering notebook is optional, this archive is the supplementary documentation judges ask to see.",
     awards: ['sustain', 'inspire'],
   },
   {
@@ -97,7 +97,7 @@ export const CAPABILITIES: Capability[] = [
     docs: 'no',
     inMatrix: true,
     detail:
-      'Every task carries an optional "what we tried, why we changed it" field. Think requires documented engineering process, trade-offs and lessons learned — this captures them at the moment of the work instead of reconstructing them from memory in March.',
+      'Every task has an optional "what we tried, why we changed it" field. Think wants your engineering process and the trade-offs written down. This catches them the week they happen, rather than in March from memory.',
     awards: ['think', 'innovate', 'design', 'inspire'],
   },
   {
@@ -108,7 +108,7 @@ export const CAPABILITIES: Capability[] = [
     docs: 'manual',
     inMatrix: true,
     detail:
-      'One team-wide library for photos, drawings and CAD screenshots. Tag by mechanism, event or date, then embed the same image in a task, a meeting note or a portfolio page instead of hunting through three camera rolls and a shared Drive folder.',
+      "One library for photos, drawings and CAD screenshots. Tag them by mechanism or event, then drop the same image into a task, a meeting note or a portfolio page. The alternative is hunting through three camera rolls and somebody's Drive folder.",
     awards: ['design', 'innovate', 'reach'],
   },
   {
@@ -120,7 +120,7 @@ export const CAPABILITIES: Capability[] = [
     docs: 'manual',
     inMatrix: true,
     detail:
-      'The portfolio is one cover plus at most fifteen pages, current-season work only. This plans them: page by page, who owns it, what state it is in, and which evidence from the season it pulls from. A planner, not a layout editor — teams still design in Canva or Slides.',
+      "The portfolio is a cover plus fifteen pages, current season only. This plans them page by page: who owns it, where it has got to, and what evidence it pulls from. It plans the pages. You still design them in Canva or Slides.",
     awards: ['think', 'control', 'inspire'],
   },
   {
@@ -132,7 +132,7 @@ export const CAPABILITIES: Capability[] = [
     docs: 'no',
     inMatrix: true,
     detail:
-      'Students are 12 to 18, and some are under 13. There is no student self-signup and no student email address: a coach creates the account, and a student signs in with the team number, a handle and a password. Photos need a coach to attest that the signed consent form exists before anything can be uploaded.',
+      "Students are 12 to 18 and some are under 13, so they don't sign themselves up and we never ask for their email. A coach makes the account; the student logs in with the team number, a handle and a password. Before any photo goes up, an adult has to record by name that the signed consent form exists.",
     awards: [],
   },
   {
@@ -144,7 +144,7 @@ export const CAPABILITIES: Capability[] = [
     docs: 'no',
     inMatrix: true,
     detail:
-      'Per-award criteria checklists taken from Competition Manual §6, each item linkable to a task, an outreach entry or a photo, with a readiness bar per award and an Inspire view showing the Think + machine + team-attribute triad.',
+      "Criteria checklists straight out of Competition Manual §6. Link each item to the task, outreach entry or photo that proves it, and get a readiness bar per award plus an Inspire view showing whether you have the Think, machine and team-attribute pieces covered.",
     awards: ['inspire', 'think', 'connect', 'reach', 'sustain', 'control', 'innovate', 'design'],
   },
   {
@@ -156,7 +156,7 @@ export const CAPABILITIES: Capability[] = [
     docs: 'manual',
     inMatrix: true,
     detail:
-      'Event, date, hours, people reached, photos and what the team learned — with the totals rolled up the way portfolios and interviews actually use them. Reach also wants documented recruitment of other teams, coaches and mentors.',
+      "Event, date, hours, people reached, photos, and what the team took away from it. The totals roll up the way a portfolio and an interview actually want them. Reach also asks you to show you recruited other teams and mentors, so that gets logged too.",
     awards: ['reach', 'connect', 'inspire'],
   },
   {
@@ -168,7 +168,7 @@ export const CAPABILITIES: Capability[] = [
     docs: 'manual',
     inMatrix: true,
     detail:
-      'Income and expense lines, sponsors with tiers and thank-you status. Sustain is the award that explicitly requires progress-tracking documentation, not just a plan — this is that documentation.',
+      "Income and expense lines, plus sponsors with tiers and whether anyone has thanked them yet. Sustain asks for documentation showing progress against your plan, not only the plan. This is meant to be that documentation.",
     awards: ['sustain'],
   },
   {
@@ -178,7 +178,7 @@ export const CAPABILITIES: Capability[] = [
     pm: 'partial',
     docs: 'manual',
     detail:
-      'League meets, qualifiers, the portfolio print deadline and the FIRST Leadership nomination window, alongside the team’s own meetings. A month view of meetings ships today; the competition calendar does not.',
+      "League meets, qualifiers, the portfolio print deadline and the FIRST Leadership nomination window, sitting alongside your own meetings. The month view of meetings works today. The competition calendar does not.",
     awards: ['sustain'],
   },
 ];

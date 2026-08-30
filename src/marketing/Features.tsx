@@ -35,10 +35,9 @@ export default function Features() {
         title="What Coglin does, and what it does not do yet"
         lede={
           <>
-            Split honestly rather than mixed into one list with ticks. Everything in
-            the first group works in the alpha today. Everything in the second is
-            planned for the 2026-27 season and is not built — that gap is why you set
-            the price.
+            Two lists rather than one with ticks against it. The first group works in
+            the alpha today. The second is planned for the 2026-27 season and does
+            not exist yet, which is the reason you get to set the price.
           </>
         }
       />
@@ -63,20 +62,16 @@ export default function Features() {
         <Wrap className="px-0">
           <ul className="text-muted-foreground max-w-2xl space-y-3 text-sm leading-relaxed">
             <li>
-              <strong className="text-foreground font-medium">
-                Scouting and match analytics.
-              </strong>{' '}
-              FTCScout owns it, it is free, and it is the robot-side game. Coglin is
-              the other side of the season.
+              Scouting and match analytics. FTCScout already does it, does it free,
+              and it belongs to the robot side of the season anyway.
             </li>
             <li>
-              <strong className="text-foreground font-medium">Chat.</strong> Discord
-              won. Your team is already there.
+              Chat. Discord won that argument years ago and your team is already
+              there.
             </li>
             <li>
-              <strong className="text-foreground font-medium">CAD file hosting.</strong>{' '}
-              OnShape stays the source of truth. Coglin holds the renders and
-              screenshots you actually reuse in a portfolio.
+              CAD file hosting. OnShape stays the source of truth. We keep the
+              renders and screenshots you end up putting in a portfolio.
             </li>
           </ul>
         </Wrap>

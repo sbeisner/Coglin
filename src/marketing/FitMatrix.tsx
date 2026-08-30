@@ -54,8 +54,9 @@ export function FitMatrix() {
 
       <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
         <strong className={STATUS_COPY.now.tone}>{STATUS_COPY.now.label}</strong> means
-        it works today. <em>This season</em> means it is planned for 2026-27 and is not
-        built yet. We would rather tell you than show you a tick.
+        you can use it today. <em>This season</em> means it is planned for 2026-27 and
+        does not exist yet. We would rather say so than give you a tick and let you
+        find out in January.
       </p>
     </>
   );

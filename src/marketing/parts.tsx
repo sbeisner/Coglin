@@ -68,9 +68,9 @@ export function CallToAction() {
           Run the whole season, not just the robot.
         </h2>
         <p className="text-muted-foreground mt-3 max-w-xl text-sm leading-relaxed">
-          Coglin is in a private alpha for the 2026-27 season — you need an access
-          code from us to create a team. Pricing is whatever you think is fair while
-          it is still being built.
+          Coglin is in a private alpha for the 2026-27 season, so you need an access
+          code from us before you can create a team. While it is still being built,
+          you decide what it is worth paying.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button asChild>

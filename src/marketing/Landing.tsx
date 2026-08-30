@@ -30,16 +30,17 @@ export default function Landing() {
           <span className="text-muted-foreground"> Run the other thirteen.</span>
         </h1>
         <p className="mt-6 max-w-2xl text-base leading-relaxed md:text-lg">
-          Under the points-based advancement model, first-place Inspire is worth{' '}
-          <strong className="font-semibold">60 points</strong> — winning the event
-          itself is worth 40. That award is won in fifteen portfolio pages, an
-          outreach log, and a season of decisions nobody wrote down.
+          First-place Inspire is worth{' '}
+          <strong className="font-semibold">60 advancement points</strong>. Winning
+          the event outright is worth 40. You win Inspire with fifteen portfolio
+          pages, an outreach record, and a season of decisions nobody thought to
+          write down at the time.
         </p>
         <p className="text-muted-foreground mt-4 max-w-2xl leading-relaxed">
-          Coglin holds all of it. Boards for build, programming and CAD like any
-          project tool — plus the layer nothing else has: award evidence, portfolio
-          planning, outreach rollups and meeting history, mapped to what judges
-          actually ask for.
+          Coglin keeps all of that in one place. It runs boards for build,
+          programming and CAD the way any project tool would. It also tracks your
+          award evidence, plans the portfolio, and totals up the outreach, arranged
+          the way the judges want to see it.
         </p>
 
         <div className="mt-8 flex flex-wrap gap-3">
@@ -60,13 +61,13 @@ export default function Landing() {
       <Wrap className="pb-10">
         <div className="border-border rounded-lg border border-dashed p-5">
           <h2 className="u-display text-base leading-tight">
-            It is a private alpha, and it is unfinished
+            It's a private alpha, and it's unfinished
           </h2>
           <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-relaxed">
-            Coglin is being built during a live season, by a coach, alongside a real
-            team running a real portfolio. {SHIPPED.length} of the pieces below work
-            today; the rest land across 2026-27. Every page on this site says which
-            is which, and you set the price while that is still true.
+            It's being written during a live season by a coach, for the team he
+            coaches. {SHIPPED.length} of the pieces below work today and the rest
+            arrive across 2026-27. Every page here tells you which is which, and
+            you set the price for as long as that's true.
           </p>
         </div>
       </Wrap>
@@ -75,7 +76,7 @@ export default function Landing() {
         <FitMatrix />
       </Section>
 
-      <Section title="Built around the awards, not around the robot">
+      <Section title="Built around what the judges read">
         <div className="grid gap-4 sm:grid-cols-2">
           {SHIPPED.slice(0, 4).map((c) => (
             <div key={c.key} className="border-border bg-card rounded-lg border p-5">

@@ -21,56 +21,56 @@ const AWARDS: { key: AwardKey; name: string; note: string; evidence: string }[] 
     name: 'Inspire',
     note: '60 / 30 / 15 advancement points',
     evidence:
-      'Contender for Think, plus at least one machine award and at least one team-attribute award. The whole season in one submission.',
+      "You need to be in contention for Think, plus one machine award and one team-attribute award. It is the whole season judged at once.",
   },
   {
     key: 'think',
     name: 'Think',
     note: 'Portfolio required',
     evidence:
-      'Engineering process, lessons learned, trade-offs and the maths behind them — documented as the work happened, not reconstructed afterwards.',
+      "Your engineering process, the trade-offs, the maths, and what you learned when something failed. Judges can tell the difference between notes kept as you went and notes written the week before.",
   },
   {
     key: 'connect',
     name: 'Connect',
     note: '',
     evidence:
-      'A written team plan with skill goals and the steps toward them, plus documented connections to the STEM community.',
+      "A written team plan with real skill goals and the steps you took toward them, plus evidence of who you actually connected with in the STEM community.",
   },
   {
     key: 'reach',
     name: 'Reach',
     note: 'New for 2025-26',
     evidence:
-      'Outreach objectives, and documented recruitment of other teams, coaches and mentors — with the numbers to back it.',
+      "Outreach objectives you set out in advance, evidence you recruited other teams and mentors, and the numbers behind both.",
   },
   {
     key: 'sustain',
     name: 'Sustain',
     note: 'New for 2025-26',
     evidence:
-      'A finance, season and sustainability plan — and, explicitly required, documentation that shows progress against it.',
+      "A finance and season plan, and then the harder part: documentation showing you made progress against it. The Manual asks for that in so many words.",
   },
   {
     key: 'control',
     name: 'Control',
     note: 'Portfolio required',
     evidence:
-      'Sensors, autonomous behaviour and software documented in the portfolio. Source code is not submitted.',
+      "Sensors, autonomous routines and how the software works, written up in the portfolio. You do not submit source code.",
   },
   {
     key: 'innovate',
     name: 'Innovate',
     note: '',
     evidence:
-      'A creative, robust design element, with risk mitigation documented and the iterations that got you there.',
+      "One creative design element that survives contact with a competition floor, plus the iterations behind it and what you did about the risks.",
   },
   {
     key: 'design',
     name: 'Design',
     note: '',
     evidence:
-      'An elegant, maintainable machine with a documented design basis — why this, and what it replaced.',
+      "A machine somebody could maintain, with a written design basis: why this version, and what it replaced.",
   },
 ];
 
@@ -82,11 +82,11 @@ export default function Awards() {
         title="What judges ask for, and what produces it"
         lede={
           <>
-            Taken from the Competition Manual §6 and the Judging Process Guide. The
-            engineering notebook is now optional and the portfolio is the only
-            required document — one cover plus at most fifteen pages, current-season
-            work only. Almost all of this is documentation, and almost none of it has
-            tooling.
+            Taken from Competition Manual §6 and the Judging Process Guide. The
+            engineering notebook is optional now, so the portfolio is the only
+            document you have to hand over: a cover plus fifteen pages, current
+            season only. Nearly all of this is paperwork, and hardly any of it has
+            software built for it.
           </>
         }
       />
@@ -131,9 +131,9 @@ export default function Awards() {
 
       <Wrap className="pb-4">
         <p className="text-muted-foreground max-w-2xl text-xs leading-relaxed">
-          Award names and criteria are described here to explain what the software is
-          for. Coglin is unofficial, uses no <i>FIRST</i>® marks or logos, and has no
-          relationship with the organisation that runs the programme.
+          The award names appear here to explain what the software is for. Coglin is
+          unofficial, uses no <i>FIRST</i>® marks or logos, and has no relationship
+          with the organisation that runs the programme.
         </p>
       </Wrap>
 
