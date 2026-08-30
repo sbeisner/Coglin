@@ -10,8 +10,9 @@ Work top to bottom. Test mode all the way through §7, then §8 flips to live.
 ## What this is
 
 A product sold at a price the customer sets — **not** a donation flow. The
-recommendation is $12 per seat per season ($144 for a 12-seat roster, against
-the $149 list that plan §7 sets for 2027-28). Language matters: these are
+recommendation is $12 per seat per season, so $144 for a 12-seat roster.
+Post-alpha pricing is undecided and no user-facing copy may state one. Language
+matters: these are
 purchases, the rows live in `purchases`, and calling them contributions or gifts
 in a dashboard, an email or a spreadsheet later undoes the point.
 

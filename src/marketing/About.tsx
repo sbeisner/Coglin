@@ -1,7 +1,13 @@
 /**
- * Who is building this and why, in the register the rest of the site uses —
- * plain, specific, and honest about scale. A one-person studio claiming the
- * voice of a company is the tell that makes a coach close the tab.
+ * Who is building this and why.
+ *
+ * Written in first person on purpose. A one-person studio using the corporate
+ * "we" about a tool built in a school shop is the tell that makes a coach close
+ * the tab, and the honest version is also the more persuasive one here: the
+ * person writing the software is in the pit on Saturday.
+ *
+ * Nothing on this page may promise what Coglin will cost after the alpha. See
+ * the header of Faq.tsx.
  */
 import { Link } from 'react-router';
 import { CallToAction, PageIntro, Section, Wrap } from './parts';
@@ -12,27 +18,30 @@ export default function About() {
       <PageIntro
         eyebrow="About"
         title="Built in a shop, during a season, by someone doing the same job"
-        lede="Coglin is made by Lilith Forge, a small studio that also builds Inkubus and Cronus. It is not a startup and it is not venture-funded."
+        lede="Coglin comes from Lilith Forge, a small studio that also makes Inkubus and Cronus. It's a very short list of people."
       />
 
       <Section title="Why it exists">
         <div className="text-muted-foreground max-w-2xl space-y-4 text-sm leading-relaxed">
           <p>
-            Every tool an FTC team uses today is either robot-side — scouting apps,
-            event data — or completely generic: Trello, Notion, a Drive folder and a
-            Discord server, stitched together each September and abandoned each June.
-            The judged season lives in scattered documents.
+            Most teams run the season out of a Drive folder, a board of some kind
+            and a Discord server. That mostly works. Then March arrives, somebody
+            has to write fifteen portfolio pages, and the question is why the
+            intake got redesigned back in October. Nobody wrote it down, so the
+            team spends a week reconstructing a decision they made in twenty
+            minutes.
           </p>
           <p>
-            Meanwhile the advancement model has moved. First-place Inspire is worth
-            60 points against 40 for winning the event, and Inspire is decided almost
-            entirely by documentation: a fifteen-page portfolio, an outreach record,
-            a sustainability plan with evidence of progress, and an interview that
-            assumes you can remember why you made a decision in October.
+            The scoring has moved too. First-place Inspire is worth 60 advancement
+            points and winning the event outright is worth 40. Inspire is decided
+            almost entirely on documentation: the portfolio, the outreach record, a
+            sustainability plan you can actually show progress against, and an
+            interview where somebody asks you to explain a choice from six months
+            ago.
           </p>
           <p>
-            Coglin is the operating system for that half of the season. It is not
-            trying to replace the scouting app, and it is not trying to be Notion.
+            That half of the season is what Coglin is for. Scouting and match data
+            are well covered by other people and we're staying out of it.
           </p>
         </div>
       </Section>
@@ -40,15 +49,15 @@ export default function About() {
       <Section title="Alpha in a live season">
         <div className="text-muted-foreground max-w-2xl space-y-4 text-sm leading-relaxed">
           <p>
-            One real team runs the whole 2026-27 season on Coglin, with the developer
-            in the room every week — a coach building the tool for the team he
-            coaches. Their data is production data from day one and never gets wiped.
+            One team runs their whole 2026-27 season on it, and I'm in the room every week,
+            because I coach them. Their data is real from the first day
+            and doesn't get wiped between releases.
           </p>
           <p>
-            That is why this site is so insistent about what does and does not work
-            yet. A feature that ships in January is genuinely useful to a team in
-            January; a feature described as shipped in September and absent in
-            January has cost that team a season they cannot redo.
+            That's why this site keeps labouring the point about what does and
+            doesn't work yet. A feature that lands in January still helps a team in
+            January. A feature you were promised in September that never arrives
+            has cost them a season they don't get to run again.
           </p>
         </div>
       </Section>
@@ -56,14 +65,16 @@ export default function About() {
       <Section title="Unofficial, permanently">
         <div className="text-muted-foreground max-w-2xl space-y-4 text-sm leading-relaxed">
           <p>
-            Coglin has no relationship with the organisation that runs the programme
-            and is not pursuing one. No <i>FIRST</i>® marks or logos appear anywhere
-            in the product or on this site, the name is used only descriptively, and
-            team verification is done by hand rather than through the official API,
-            whose terms bar commercial use.
+            No licence, no endorsement, and no conversation with <i>FIRST</i>®
+            about having either. Their marks and logos appear nowhere in the product or on
+            this site, and the programme is named here only to say who the software
+            is for. Team numbers are checked by hand rather than through the
+            official API, whose terms rule out commercial use.
           </p>
           <p>
-            Being unofficial is not a risk. Ever <em>looking</em> official would be.
+            None of that is going to change. We would rather be obviously
+            unofficial than accidentally look like we have some blessing we do
+            not have.
           </p>
         </div>
       </Section>

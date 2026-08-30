@@ -1,11 +1,18 @@
 /**
- * The questions a coach actually asks before putting a team's season in
- * somebody's software — and the ones a parent or a principal asks afterwards.
+ * The questions a coach asks before putting a season into somebody's software,
+ * and the ones a parent or a principal asks afterwards.
  *
- * Answered plainly, including the ones with awkward answers: it is unofficial,
- * it is unfinished, and a coach cannot use it to collect a parent's consent.
- * Softening any of those would be the kind of thing that gets found out in
- * February.
+ * Two rules for anything added here:
+ *
+ *  1. NO PROMISES ABOUT PRICE AFTER THE ALPHA. An earlier version said Coglin
+ *     "will list at $149 a season". That number lives in an internal plan and
+ *     has never been decided in public; printing it on a marketing page turns a
+ *     working assumption into a commitment we would have to honour or explain.
+ *     Say what it costs now, say the rest is undecided, and leave it there.
+ *
+ *  2. ANSWER THE AWKWARD ONES AWKWARDLY. The COPPA answer admits we cannot
+ *     collect a parent's consent, and the export answer admits there is no
+ *     button. A FAQ that only contains flattering answers is not read as a FAQ.
  */
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -16,11 +23,11 @@ const QA: { q: string; a: ReactNode }[] = [
     q: 'Is this official? Is it endorsed by FIRST?',
     a: (
       <>
-        No, and it never will be. Coglin is unofficial by design — no <i>FIRST</i>®
-        logos, no licensing arrangement, no endorsement, and we are not seeking one.
-        Team numbers are checked by hand against public event data rather than
-        through the official API, whose terms bar commercial use. Nothing here is
-        affiliated with the organisation that runs the programme.
+        No, and we're not trying to be. There is no licence, no endorsement and
+        no relationship with <i>FIRST</i>® at all, and we're not asking for one. You
+        won't find their logo anywhere in the product. Team numbers get
+        checked by hand against the public event pages, because the terms on the
+        official API rule out commercial use.
       </>
     ),
   },
@@ -28,14 +35,21 @@ const QA: { q: string; a: ReactNode }[] = [
     q: 'My students are under 13. How does that work?',
     a: (
       <>
-        Students never sign themselves up and never need an email address. A coach
-        creates each account, and a student signs in with the team number, a handle
-        and a password. We hold a display name and a handle, and nothing else.
-        Photographs are gated: a named adult has to record that the signed consent
-        and release form exists before an image can be attached to a student, and
-        withdrawing that consent takes the photo down in the same action. Coglin
-        cannot obtain verifiable parental consent and does not pretend to — a
-        checkbox in a web app is not that.
+        <p>
+          Coaches create the accounts. Students never sign up themselves and never
+          give us an email address. They log in with the team number, a handle and
+          a password, and all we keep is the handle and a display name.
+        </p>
+        <p className="mt-3">
+          Photos are stricter. Before a picture can be attached to a student, an
+          adult has to record by name that the signed consent form exists. Take
+          the consent away and the photo comes down in the same action.
+        </p>
+        <p className="mt-3">
+          The limit is worth saying plainly: we can't collect a parent's consent on
+          your behalf. A tickbox on a website isn't consent, and we're not going
+          to dress it up as one.
+        </p>
       </>
     ),
   },
@@ -43,13 +57,13 @@ const QA: { q: string; a: ReactNode }[] = [
     q: 'What actually works right now?',
     a: (
       <>
-        Boards, meetings and notes, attendance, the media library, the roster and the
-        portfolio planner. The award tracker, the outreach log and the budget are
-        routed and visible but produce nothing yet. The{' '}
+        Boards, meetings, notes, attendance, the roster, the media library and the
+        portfolio planner. The award tracker, the outreach log and the budget pages
+        are in the nav but don't do anything yet. The{' '}
         <Link to="/features" className="text-foreground underline underline-offset-4">
           features page
         </Link>{' '}
-        splits the two lists, and every table on this site marks which is which.
+        keeps those two lists apart, and so does every table on this site.
       </>
     ),
   },
@@ -57,22 +71,33 @@ const QA: { q: string; a: ReactNode }[] = [
     q: 'Why do I get to choose the price?',
     a: (
       <>
-        Because the product is unfinished. It will list at $149 a season once it is
-        done; until the award tracker and outreach rollups ship, the teams running a
-        season on it are better placed to price it than we are. We recommend $12 per
-        seat per season — $144 for a twelve-person team. It is a real purchase at a
-        price you set, not a donation, and paying nothing during the alpha does not
-        lock you out of anything.
+        Because you'd be paying for something half built, and we'd rather find out
+        what that's worth to you than guess at it. The suggestion is $12
+        a seat for the season, so $144 for a team of twelve. Pay less if that's what the budget
+        allows. It is a purchase either way rather than a donation,
+        and not paying doesn't lock you out of anything during the alpha.
       </>
     ),
   },
   {
-    q: 'Is it per seat, then?',
+    q: 'What will it cost after the alpha?',
     a: (
       <>
-        Only as a way to size the number against a roster you already know. The real
-        pricing when it launches is flat per team, per season — per-seat billing is
-        hostile to a school purchase order, and rosters change mid-season anyway.
+        We haven't decided. It won't stay pay-what-you-want forever and it won't be
+        free, but the shape of it is still open, and anything we told you today
+        would be a guess dressed up as a plan. Whatever we land on
+        gets announced before it applies to anybody, and nobody who paid during the
+        alpha will be billed a difference afterwards.
+      </>
+    ),
+  },
+  {
+    q: 'Is it priced per seat, then?',
+    a: (
+      <>
+        Only as a way of working out a number against a roster you already know.
+        Charging per seat for real would be a nuisance on a school purchase order,
+        and rosters change halfway through a season anyway.
       </>
     ),
   },
@@ -87,8 +112,7 @@ const QA: { q: string; a: ReactNode }[] = [
         >
           admin@lilithforge.com
         </a>{' '}
-        and we will invoice you. Card checkout is what is automated so far; invoicing
-        is a person, which at alpha scale is fine.
+        and we will invoice you. Card checkout is the part that's automated so far. Invoicing is a person answering email, which is fine at this size.
       </>
     ),
   },
@@ -96,19 +120,19 @@ const QA: { q: string; a: ReactNode }[] = [
     q: 'What happens to our data after the season?',
     a: (
       <>
-        It stays. The whole point of putting a season in one place is that next
-        September you still have it — the outreach log, the portfolio history, the
-        decision logs, the returning members. A season that evaporates in June would
-        make the tool worth less than the spreadsheet it replaced.
+        It stays where it is. Next September you'll still have last year's
+        outreach log, the portfolio work, the decision logs and the returning
+        members. That is most of the reason to keep a season in one place instead
+        of five.
       </>
     ),
   },
   {
-    q: 'Can I get my data out?',
+    q: 'Can I get our data out?',
     a: (
       <>
-        Yes — ask and we will export it. A self-serve export is on the list and is
-        not built yet, which is the honest answer rather than the reassuring one.
+        Ask and we will export it for you. There's no self-serve export button
+        yet.
       </>
     ),
   },
@@ -116,15 +140,14 @@ const QA: { q: string; a: ReactNode }[] = [
     q: 'How do I get in?',
     a: (
       <>
-        Coglin is invite-only for the 2026-27 season, so creating a team needs an
-        access code. Email{' '}
+        You need an access code for the 2026-27 season. Email{' '}
         <a
           className="text-foreground underline underline-offset-4"
           href="mailto:admin@lilithforge.com?subject=Coglin%20alpha%20access"
         >
           admin@lilithforge.com
         </a>{' '}
-        and tell us your team number.
+        with your team number.
       </>
     ),
   },

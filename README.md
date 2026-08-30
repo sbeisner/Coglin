@@ -159,13 +159,17 @@ in how the rows get talked about later. A team that pays $80 for a season bought
 a season for $80. Charity framing would also make the pricing evidence useless:
 what someone donates says nothing about what they would pay.
 
-**The price is theirs because the product is unfinished.** Plan §7 already knows
-the number — $149 list, $99 verified, for 2027-28. Until the award tracker and
-outreach rollups ship, the teams running a season on this are better placed to
-price it than we are. The recommendation is **$12 per seat per season**, which
-puts a 12-seat roster at $144, near that list price. Access is not gated on
-payment during the alpha (plan §8); "not gated" is a separate decision from "not
-sold".
+**The price is theirs because the product is unfinished.** The recommendation is
+**$12 per seat per season**, which puts a 12-seat roster at $144. Access is not
+gated on payment during the alpha (plan §8); "not gated" is a separate decision
+from "not sold".
+
+**Post-alpha pricing is undecided, and the site must keep saying so.** Plan §7
+carries a working figure for 2027-28. It is an internal planning number: it must
+not appear in any user-facing copy, because printing it turns an assumption into
+a commitment we then have to honour or publicly retract. The pricing page and
+the FAQ both had to be walked back from exactly that. Say what it costs today,
+say the rest is undecided.
 
 **It is the only public part of the API.** `/api/billing/checkout` and
 `/api/billing/webhook` take no session — a coach can buy before they have an

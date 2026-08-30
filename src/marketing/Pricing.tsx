@@ -15,9 +15,12 @@
  *     useless — what someone donates says nothing about what they would pay.
  *
  *  2. THE PRICE IS THEIRS BECAUSE THE PRODUCT IS UNFINISHED, not because we are
- *     shy about charging. Plan §7 already knows the number ($149 list, $99
- *     verified, 2027-28). Until the award tracker and outreach rollups ship, we
- *     have not earned the right to name it and the teams using it have.
+ *     shy about charging. `coglin-plan.md` §7 carries a working number for the
+ *     2027-28 launch, but that is an INTERNAL PLANNING FIGURE and it must not
+ *     appear in copy. An earlier version of this page printed it as "it will
+ *     list at $149 a season once it is finished", which turned an assumption
+ *     into a promise we would then have to honour or publicly walk back. Say
+ *     what it costs today, say the rest is undecided, stop there.
  *
  *  3. THE MATRIX DOES NOT LIE ABOUT WHAT SHIPS — see `capabilities.ts`, which is
  *     now the single source for that across the whole site.
@@ -50,7 +53,7 @@ const TURNSTILE_SITE_KEY: string | undefined = import.meta.env
 const PRESETS = [
   { rate: 6, label: 'Tight budget' },
   { rate: PER_SEAT, label: 'Recommended' },
-  { rate: 20, label: 'Above list' },
+  { rate: 20, label: "It's earned it" },
 ] as const;
 
 const MESSAGES: Record<string, string> = {
@@ -112,20 +115,21 @@ export default function Pricing() {
             <strong className="text-foreground font-semibold">
               Coglin costs money. During the alpha, you decide how much.
             </strong>{' '}
-            We recommend {dollars(PER_SEAT)} per seat for the season. Pay more if it
-            is worth more to you, less if your budget says so — either way you are
-            buying a season of software, at a price you set.
+            We recommend {dollars(PER_SEAT)} per seat for the season. Pay more if
+            it is worth more to you, less if your budget says so. Either way you
+            are buying a season of software, at a price you set.
           </>
         }
       />
 
       <Wrap className="pb-4">
         <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
-          We are not being coy about the price. It will list at $149 a season once it
-          is finished. But the award tracker and the outreach rollups are not built
-          yet — the table below says exactly what is and is not — and until they are,
-          the teams actually running a season on this are better placed to price it
-          than we are.
+          The award tracker and the outreach rollups aren't built yet, and the
+          table below is specific about what is and isn't. Until that gap closes,
+          the teams actually running a season on this have a better idea what it
+          is worth than we do, so we would rather you set the number. What Coglin
+          costs after the alpha hasn't been decided, and whatever we land on will
+          not be applied backwards to anyone who paid during it.
         </p>
       </Wrap>
 

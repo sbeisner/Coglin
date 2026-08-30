@@ -38,12 +38,15 @@ export function getCryptoProvider(): Stripe.CryptoProvider {
 /**
  * The recommended price, in cents per seat per season.
  *
- * $12 x a 12-seat roster is $144, which lands on the $149 list price that
- * `coglin-plan.md` §7 sets for the 2027-28 paid launch. That coherence is the
- * point twice over: a customer who pays the recommendation during the alpha pays
- * roughly what the product will cost, so nobody discovers at launch that they
- * were overcharged for an unfinished tool — and what teams actually choose is
- * only useful pricing evidence if it is denominated near the real number.
+ * $12 x a 12-seat roster is $144, which sits near the working figure
+ * `coglin-plan.md` §7 carries for the 2027-28 launch. Anchoring here means what
+ * teams choose is useful pricing evidence rather than a number floating free of
+ * anything.
+ *
+ * THAT PLANNED FIGURE IS INTERNAL AND MUST NOT APPEAR IN COPY. The pricing page
+ * printed it once as "it will list at $149 a season", which converted a working
+ * assumption into a public commitment. Post-alpha pricing is undecided and the
+ * site says so. See the header of src/marketing/Faq.tsx.
  *
  * Note this is a per-SEAT recommendation, while §7's eventual list price is flat
  * per-team. That is a deliberate difference, not drift: a per-seat figure is how
