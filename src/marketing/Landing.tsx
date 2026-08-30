@@ -30,9 +30,12 @@ export default function Landing() {
     <>
       <Wrap className="pt-14 pb-10 md:pt-20">
         <div className="u-eyebrow">Season operations for FTC teams</div>
+        {/* No appositive clause after this. It briefly read "Everything a
+            season takes. The robot included." -- which reassures against a
+            doubt no FTC coach has, and by raising it, creates one. Assert what
+            the product is; do not defend it against imagined objections. */}
         <h1 className="u-display mt-4 max-w-3xl text-3xl leading-[1.1] md:text-5xl">
           Everything a season takes.
-          <span className="text-muted-foreground"> The robot included.</span>
         </h1>
         <p className="mt-6 max-w-2xl text-base leading-relaxed md:text-lg">
           Build, programming and CAD on boards your students will actually use.
