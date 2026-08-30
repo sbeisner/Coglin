@@ -12,8 +12,7 @@
  * official; it must not.
  */
 import { CallToAction, PageIntro, Wrap } from './parts';
-import { capabilitiesForAward, STATUS_COPY, type AwardKey } from './capabilities';
-import { cn } from '@/lib/utils';
+import { capabilitiesForAward, type AwardKey } from './capabilities';
 
 const AWARDS: { key: AwardKey; name: string; note: string; evidence: string }[] = [
   {
@@ -114,12 +113,9 @@ export default function Awards() {
                   {caps.map((c) => (
                     <li
                       key={c.key}
-                      className="border-border flex items-baseline gap-2 rounded-md border px-2.5 py-1.5 text-xs"
+                      className="border-border rounded-md border px-2.5 py-1.5 text-xs"
                     >
-                      <span>{c.job}</span>
-                      <span className={cn(STATUS_COPY[c.status].tone)}>
-                        {STATUS_COPY[c.status].label}
-                      </span>
+                      {c.job}
                     </li>
                   ))}
                 </ul>

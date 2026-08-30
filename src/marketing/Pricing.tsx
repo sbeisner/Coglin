@@ -22,8 +22,9 @@
  *     into a promise we would then have to honour or publicly walk back. Say
  *     what it costs today, say the rest is undecided, stop there.
  *
- *  3. THE MATRIX DOES NOT LIE ABOUT WHAT SHIPS — see `capabilities.ts`, which is
- *     now the single source for that across the whole site.
+ *  3. `capabilities.ts` remains the single source for what ships. The matrix no
+ *     longer prints a per-row status — that read as a progress report rather
+ *     than a comparison — but the data and its drift guard are still there.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -124,12 +125,11 @@ export default function Pricing() {
 
       <Wrap className="pb-4">
         <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
-          The award tracker and the outreach rollups aren't built yet, and the
-          table below is specific about what is and isn't. Until that gap closes,
-          the teams actually running a season on this have a better idea what it
-          is worth than we do, so we would rather you set the number. What Coglin
-          costs after the alpha hasn't been decided, and whatever we land on will
-          not be applied backwards to anyone who paid during it.
+          It is an alpha, and parts of it are still landing. While that is true,
+          the teams actually running a season on Coglin have a better idea what it
+          is worth than we do, so we would rather you set the number than guess at
+          it. What it costs after the alpha hasn't been decided, and whatever we
+          land on will not be applied backwards to anyone who paid during it.
         </p>
       </Wrap>
 

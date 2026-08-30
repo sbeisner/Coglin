@@ -19,7 +19,11 @@ import { FitMatrix } from './FitMatrix';
 import { CAPABILITIES } from './capabilities';
 import { Screenshot } from './Screenshot';
 
-const SHIPPED = CAPABILITIES.filter((c) => c.status === 'now');
+// Shipped first purely for ordering — the cards on this page do not label it.
+const FEATURED = [
+  ...CAPABILITIES.filter((c) => c.status === 'now'),
+  ...CAPABILITIES.filter((c) => c.status === 'soon'),
+];
 
 export default function Landing() {
   return (
@@ -69,13 +73,13 @@ export default function Landing() {
       <Wrap className="pb-10">
         <div className="border-border rounded-lg border border-dashed p-5">
           <h2 className="u-display text-base leading-tight">
-            It's a private alpha, and it's unfinished
+            It's a private alpha
           </h2>
           <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-relaxed">
-            It's being written during a live season by a coach, for the team he
-            coaches. {SHIPPED.length} of the pieces below work today and the rest
-            arrive across 2026-27. Every page here tells you which is which, and
-            you set the price for as long as that's true.
+            Coglin is being written during a live season by a coach, for the team he
+            coaches, and parts of it are still landing. You need an access code to
+            start a team, and while it is being built you decide what it is worth
+            paying.
           </p>
         </div>
       </Wrap>
@@ -94,7 +98,7 @@ export default function Landing() {
       <Section title="Built around what the judges read">
         <Screenshot name="decision-log" className="mb-6" />
         <div className="grid gap-4 sm:grid-cols-2">
-          {SHIPPED.slice(0, 4).map((c) => (
+          {FEATURED.slice(0, 4).map((c) => (
             <div key={c.key} className="border-border bg-card rounded-lg border p-5">
               <h3 className="u-display text-base leading-tight">{c.job}</h3>
               <p className="text-muted-foreground mt-2 text-sm leading-relaxed">

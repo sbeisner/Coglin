@@ -10,10 +10,12 @@
  *   win — a coach who uses Trello daily knows the table is wrong and stops
  *   believing the rest of it.
  *
- *   THREE STATES FOR US, NOT TWO. "In the alpha" and "This season" are
- *   different claims, and the second one is not a tick.
+ *   The Coglin column used to carry "In the alpha" / "This season" per row. It
+ *   now reads as one column, because splitting it turned a comparison table
+ *   into a progress report and answered a question nobody scanning it had asked.
+ *   `capabilities.ts` still knows the difference and the drift guard still runs.
  */
-import { MATRIX, FIT_COPY, STATUS_COPY } from './capabilities';
+import { MATRIX, FIT_COPY } from './capabilities';
 import { cn } from '@/lib/utils';
 
 export function FitMatrix() {
@@ -39,9 +41,7 @@ export function FitMatrix() {
                 <th scope="row" className="p-3 text-left font-normal">
                   {c.job}
                 </th>
-                <td className={cn('p-3', STATUS_COPY[c.status].tone)}>
-                  {STATUS_COPY[c.status].label}
-                </td>
+                <td className="text-primary-ink p-3 font-semibold">Yes</td>
                 <td className={cn('p-3', FIT_COPY[c.pm].tone)}>{FIT_COPY[c.pm].label}</td>
                 <td className={cn('p-3', FIT_COPY[c.docs].tone)}>
                   {FIT_COPY[c.docs].label}
@@ -53,10 +53,8 @@ export function FitMatrix() {
       </div>
 
       <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
-        <strong className={STATUS_COPY.now.tone}>{STATUS_COPY.now.label}</strong> means
-        you can use it today. <em>This season</em> means it is planned for 2026-27 and
-        does not exist yet. We would rather say so than give you a tick and let you
-        find out in January.
+        Coglin is in a private alpha for the 2026-27 season and parts of it are still
+        landing. Ask us where anything stands and you will get a straight answer.
       </p>
     </>
   );
