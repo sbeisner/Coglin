@@ -43,7 +43,7 @@ export default function Features() {
     <>
       <PageIntro
         eyebrow="Features"
-        title="What Coglin does, and what it does not do yet"
+        title="What Coglin does"
         lede={
           <>
             Boards, meetings and notes are the daily surface. The award tracking,

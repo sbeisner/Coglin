@@ -14,13 +14,14 @@
  *     offered "Create your team" on the page their own app links to. The header
  *     asks the existing SessionProvider and offers "Open Coglin" instead.
  */
-import { useState } from 'react';
-import { Link, NavLink, Outlet } from 'react-router';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { Menu, X } from 'lucide-react';
 import { useSessionState } from '@/lib/session';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { PAGES, ORIGIN } from './seo';
 
 const LINKS = [
   { to: '/features', label: 'Features' },
@@ -30,7 +31,30 @@ const LINKS = [
   { to: '/about', label: 'About' },
 ];
 
+/**
+ * Keep <title> and the canonical link in step with client-side navigation.
+ *
+ * The prerendered HTML carries the right tags for the document the browser
+ * loaded, which is what crawlers and link-preview scrapers read. But react-router
+ * navigation swaps the view without touching <head>, so clicking Pricing from
+ * Features left the tab, the history entry and any analytics still saying
+ * "Features". Crawlers were fine; people were not.
+ */
+function useRouteMeta() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const page = PAGES.find((p) => p.path === pathname);
+    if (!page) return;
+    document.title = page.title;
+    const link = document.querySelector('link[rel="canonical"]');
+    if (link) link.setAttribute('href', `${ORIGIN}${page.path}`);
+    const desc = document.querySelector('meta[name="description"]');
+    if (desc) desc.setAttribute('content', page.description);
+  }, [pathname]);
+}
+
 export function MarketingShell() {
+  useRouteMeta();
   const [open, setOpen] = useState(false);
   const { status } = useSessionState();
   const signedIn = status === 'authenticated';
