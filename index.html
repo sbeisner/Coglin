@@ -10,12 +10,11 @@
     />
     <link rel="canonical" href="https://coglin.lilithforge.com/" />
 
-    <!-- These tags are GLOBAL, not per-route: the whole site is one SPA shell,
-         so every page shares them. That is a real limitation of serving
-         marketing from the app bundle rather than static HTML, and it is
-         accepted deliberately for an invite-only alpha. If organic search ever
-         matters, the fix is a Vite multi-page build or per-path HTMLRewriter in
-         the Worker — not a fourth copy of these tags. -->
+    <!-- FALLBACK ONLY. scripts/prerender.mjs strips these and writes per-route
+         title, description, canonical and OG tags into each marketing page at
+         build time. What is left here is what an unprerendered route gets —
+         /app/*, /login, /invite/:token — none of which should be indexed. Edit
+         src/marketing/seo.ts, not this. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Coglin" />
     <meta property="og:url" content="https://coglin.lilithforge.com/" />
