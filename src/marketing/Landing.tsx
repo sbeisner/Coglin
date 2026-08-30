@@ -31,21 +31,22 @@ export default function Landing() {
       <Wrap className="pt-14 pb-10 md:pt-20">
         <div className="u-eyebrow">Season operations for FTC teams</div>
         <h1 className="u-display mt-4 max-w-3xl text-3xl leading-[1.1] md:text-5xl">
-          The robot is two pages of the portfolio.
-          <span className="text-muted-foreground"> Run the other thirteen.</span>
+          Everything a season takes.
+          <span className="text-muted-foreground"> The robot included.</span>
         </h1>
         <p className="mt-6 max-w-2xl text-base leading-relaxed md:text-lg">
-          First-place Inspire is worth{' '}
-          <strong className="font-semibold">60 advancement points</strong>. Winning
-          the event outright is worth 40. You win Inspire with fifteen portfolio
-          pages, an outreach record, and a season of decisions nobody thought to
-          write down at the time.
+          Build, programming and CAD on boards your students will actually use.
+          Meeting notes, attendance, outreach, sponsors and award evidence in the
+          same place, so the season is one thing instead of six.
         </p>
         <p className="text-muted-foreground mt-4 max-w-2xl leading-relaxed">
-          Coglin keeps all of that in one place. It runs boards for build,
-          programming and CAD the way any project tool would. It also tracks your
-          award evidence, plans the portfolio, and totals up the outreach, arranged
-          the way the judges want to see it.
+          First-place Inspire is worth{' '}
+          <strong className="text-foreground font-semibold">
+            60 advancement points
+          </strong>{' '}
+          and winning the event outright is worth 40, so most of what decides your
+          season is a record of how you worked. Coglin is built to keep that record
+          as you go, rather than leaving you to reconstruct it in March.
         </p>
 
         <div className="mt-8 flex flex-wrap gap-3">
@@ -95,7 +96,7 @@ export default function Landing() {
         </div>
       </Section>
 
-      <Section title="Built around what the judges read">
+      <Section title="The build and the paperwork, in the same product">
         <Screenshot name="decision-log" className="mb-6" />
         <div className="grid gap-4 sm:grid-cols-2">
           {FEATURED.slice(0, 4).map((c) => (

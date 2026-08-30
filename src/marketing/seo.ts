@@ -29,9 +29,9 @@ export const ORIGIN = 'https://coglin.lilithforge.com';
 export const PAGES: PageMeta[] = [
   {
     path: '/',
-    title: 'Coglin — season operations for FIRST Tech Challenge teams',
+    title: 'Coglin — run a whole FIRST Tech Challenge season in one place',
     description:
-      'Boards, meeting notes, award evidence and portfolio planning for FIRST Tech Challenge teams. First-place Inspire is worth 60 advancement points; Coglin runs the thirteen portfolio pages that are not the robot.',
+      'One place for a whole FIRST Tech Challenge season: build, programming and CAD boards, meeting notes and attendance, outreach, sponsors, award evidence and portfolio planning.',
     changefreq: 'weekly',
     priority: '1.0',
   },

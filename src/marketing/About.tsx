@@ -40,8 +40,14 @@ export default function About() {
             ago.
           </p>
           <p>
-            That half of the season is what Coglin is for. Scouting and match data
-            are well covered by other people and we're staying out of it.
+            Coglin is meant to hold all of it. The build boards and the award
+            evidence are the same product, because they are the same season, and
+            splitting them across five tools is how the connection between what
+            you did and what you can show gets lost.
+          </p>
+          <p>
+            Scouting and match analytics are the one thing we stay out of. That is
+            a different problem, other people solve it well, and it is free.
           </p>
         </div>
       </Section>

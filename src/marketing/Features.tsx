@@ -66,7 +66,8 @@ export default function Features() {
           <ul className="text-muted-foreground max-w-2xl space-y-3 text-sm leading-relaxed">
             <li>
               Scouting and match analytics. FTCScout already does it, does it free,
-              and it belongs to the robot side of the season anyway.
+              and analysing other teams' matches is a different job from running
+              your own season.
             </li>
             <li>
               Chat. Discord won that argument years ago and your team is already

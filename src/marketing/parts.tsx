@@ -65,7 +65,7 @@ export function CallToAction() {
     <Wrap className="pt-8 pb-4">
       <div className="border-border bg-card rounded-lg border p-6 md:p-8">
         <h2 className="u-display text-xl leading-tight md:text-2xl">
-          Run the whole season, not just the robot.
+          Run the whole season in one place.
         </h2>
         <p className="text-muted-foreground mt-3 max-w-xl text-sm leading-relaxed">
           Coglin is in a private alpha for the 2026-27 season, so you need an access
