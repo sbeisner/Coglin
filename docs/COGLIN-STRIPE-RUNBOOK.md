@@ -86,10 +86,18 @@ the key does not restrict this.
 
 ## 3. Set the two secrets
 
+Wrangler needs Node 22 and the shell here defaults to 20. These put Node 22 on
+PATH for the one command rather than going through `nvm use`, which is easy to
+mangle when pasted — a chain that breaks feeds the next word to nvm and it
+answers `N/A: version "production" is not yet installed`. Same approach as
+`.claude/launch.json`.
+
 ```bash
-cd ~/lilithforge/coglin && nvm use
-npx wrangler secret put STRIPE_SECRET_KEY --env production      # rk_test_…
-npx wrangler secret put STRIPE_WEBHOOK_SECRET --env production  # whsec_…
+cd ~/lilithforge/coglin && PATH="$HOME/.nvm/versions/node/v22.12.0/bin:$PATH" npx wrangler secret put STRIPE_SECRET_KEY --env production
+```
+
+```bash
+cd ~/lilithforge/coglin && PATH="$HOME/.nvm/versions/node/v22.12.0/bin:$PATH" npx wrangler secret put STRIPE_WEBHOOK_SECRET --env production
 ```
 
 Each prompts for the value; pastes are not echoed. Wrangler redeploys the Worker
@@ -122,8 +130,7 @@ At <https://coglin.lilithforge.com/pricing>, signed out:
 - [ ] The row landed and says `paid`:
 
 ```bash
-npx wrangler d1 execute coglin-prod --remote --env production \
-  --command "SELECT status, amount_cents, seat_count, team_number, team_name FROM purchases ORDER BY created_at DESC LIMIT 5;"
+cd ~/lilithforge/coglin && PATH="$HOME/.nvm/versions/node/v22.12.0/bin:$PATH" npx wrangler d1 execute coglin-prod --remote --env production --command "SELECT status, amount_cents, seat_count, team_number, team_name FROM purchases ORDER BY created_at DESC LIMIT 5;"
 ```
 
 - [ ] Resend that same event from the Stripe dashboard. Still exactly one `paid`
@@ -175,8 +182,7 @@ rule** on `/api/billing/checkout` — 5 requests per minute per IP.
 ## Afterwards
 
 ```bash
-npx wrangler d1 execute coglin-prod --remote --env production \
-  --command "SELECT season_label, seat_count, amount_cents, team_number, team_name, status, paid_at FROM purchases WHERE status='paid' ORDER BY paid_at DESC;"
+cd ~/lilithforge/coglin && PATH="$HOME/.nvm/versions/node/v22.12.0/bin:$PATH" npx wrangler d1 execute coglin-prod --remote --env production --command "SELECT season_label, seat_count, amount_cents, team_number, team_name, status, paid_at FROM purchases WHERE status='paid' ORDER BY paid_at DESC;"
 ```
 
 - The webhook is the only writer of `status`. A purchase stuck `pending` with a
