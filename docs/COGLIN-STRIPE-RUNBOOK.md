@@ -1,198 +1,113 @@
-# Alpha pricing — manual setup checklist
+# Turning on checkout
 
-Everything that has to happen **outside this repo** to make `/pricing` take
-money. The code is done and tested (`worker/routes/billing.ts`,
-`worker/lib/billing.ts`, `src/routes/Pricing.tsx`); none of it does anything
-until the steps below are complete.
+Everything except Stripe itself is already live: the code is deployed, the
+`purchases` table exists on `coglin-prod`, and `/pricing` is public. What is
+missing is two secrets. **No code change, no migration, and no redeploy** —
+`wrangler secret put` rolls the Worker on its own.
 
-Work top to bottom. Test mode all the way through §7, then §8 flips to live.
+Until they are set, `POST /api/billing/checkout` answers 503 and the page tells
+the visitor "Checkout isn't switched on yet", which is the correct state, just
+not a useful one.
 
-## What this is
+Work in **test mode** through §3, then repeat §1–§2 in live mode. Going straight
+to live is possible and saves fifteen minutes, but the first real card is then
+also the first time the webhook has ever fired.
 
-A product sold at a price the customer sets — **not** a donation flow. The
-recommendation is $12 per seat per season, so $144 for a 12-seat roster.
-Post-alpha pricing is undecided and no user-facing copy may state one. Language
-matters: these are
-purchases, the rows live in `purchases`, and calling them contributions or gifts
-in a dashboard, an email or a spreadsheet later undoes the point.
-
-What it is *not* is a paywall. Access is not gated on payment during the alpha
-(plan §8) and no code reads the `purchases` table. Real entitlement checking is
-Phase 5 (COG-023). If you find yourself adding one because of something here,
-stop — that is a decision, not a follow-up.
+> **Do not set `TURNSTILE_SECRET_KEY`.** It is paired with the build-time
+> `VITE_TURNSTILE_SITE_KEY`, and setting one without the other makes the server
+> reject every checkout with `challenge_failed` on a page that otherwise looks
+> fine. Leave both unset; the server-side amount clamp does not depend on it.
+> `worker/routes/billing.test.ts` has a test named after this exact failure.
 
 ---
 
-## 0. Before you start
-
-- [ ] **Node 22.** `nvm use` in this repo (`.nvmrc` pins 22.12.0). Wrangler
-      refuses to run on 20 and the error looks unrelated to what you were doing.
-- [ ] **Wrangler is authenticated** for the LilithForge Cloudflare account:
-      `npx wrangler whoami`. (Note: the stored OAuth token has previously
-      lacked R2 scope. D1 and secrets are unaffected, but if a command fails
-      with a permissions error, re-auth before debugging anything else.)
-- [ ] **Stripe CLI** for the local test: `brew install stripe/stripe-cli/stripe`
-      then `stripe login`.
-
-Already done, nothing to do: DNS and the custom domains
-(`coglin.lilithforge.com`, `coglin-staging.lilithforge.com`) are live and routed
-in `wrangler.jsonc`.
-
----
-
-## 1. Stripe — product (test mode)
+## 1. Product
 
 Same Stripe account as Inkubus. Toggle to **test mode** first (top right).
 
-- [ ] Product catalog → **+ Add product**. Name: `Coglin — Season`.
-- [ ] **Do not add a Price.** The buyer sets the amount, which is passed inline
-      as `price_data.unit_amount` on each Checkout Session. There is no price ID
-      to copy anywhere, and creating one will just confuse the next person.
-- [ ] Developers → API keys → copy the **Secret key** (`sk_test_...`).
-      This is the same key Inkubus uses; you do not need a second one.
+- [ ] Product catalog → **+ Add product**. Name: `Coglin — Season`. Save.
+- [ ] **Do not add a price.** The buyer sets the amount and it is passed inline
+      per Checkout Session. There is no price ID to copy anywhere, and creating
+      one will only confuse the next person.
+- [ ] Developers → API keys → copy the **Secret key** (`sk_test_…`). This is the
+      same key Inkubus uses; you do not need a second one.
 
-## 2. Cloudflare Turnstile
+## 2. Webhook endpoint
 
-`/api/billing/checkout` is public and unauthenticated, which makes it a
-card-testing target.
+Developers → **Webhooks** (newer Stripe dashboards call this **Event
+destinations**) → **+ Add endpoint**. This is a *new* endpoint even though the
+account is shared: Inkubus's points at a different hostname and its signing
+secret will not verify anything sent here.
 
-- [ ] Cloudflare dashboard → Turnstile → **Add widget**.
-- [ ] Hostnames: `coglin.lilithforge.com`, `coglin-staging.lilithforge.com`,
-      and `localhost`, all on the one widget.
-- [ ] Copy the **Site key** → this becomes `VITE_TURNSTILE_SITE_KEY`.
-- [ ] Copy the **Secret key** → this becomes `TURNSTILE_SECRET_KEY`.
+- [ ] Endpoint URL:
 
-> **These two are a pair, and getting it half-right breaks checkout silently.**
-> The page only sends a token when the site key was built into the bundle, and
-> the server rejects a missing token whenever the secret is set. Configure one
-> without the other and every checkout fails with `challenge_failed`, on a page
-> that otherwise looks completely fine. Set both or neither.
->
-> The **site key is read by Vite at build time** — it is not a Worker secret and
-> must be exported in the shell that runs `npm run build` / the deploy script.
-> It ships in the client bundle, which is fine; site keys are public.
+      https://coglin.lilithforge.com/api/billing/webhook
 
-Skipping Turnstile entirely is supported (leave both unset). Do §3 regardless.
+- [ ] Events — exactly these two, nothing else:
 
-## 3. WAF rate limit
+      checkout.session.completed
+      charge.refunded
 
-- [ ] Cloudflare dashboard → the `lilithforge.com` zone → Security → WAF →
-      Rate limiting rules → **Create rule**.
-- [ ] Match `http.request.uri.path eq "/api/billing/checkout"`, 5 requests per
-      minute per IP, action Block.
+- [ ] Reveal the **Signing secret** (`whsec_…`).
 
-This one does not depend on the app being configured correctly, which is why it
-is worth having even if you skip Turnstile.
-
-## 4. Local test
-
-Two terminals.
+## 3. Set the secrets
 
 ```bash
-nvm use && npm run dev
+cd ~/lilithforge/coglin && nvm use
+npx wrangler secret put STRIPE_SECRET_KEY --env production      # sk_test_…
+npx wrangler secret put STRIPE_WEBHOOK_SECRET --env production  # whsec_…
 ```
+
+Each prompts for the value and pastes are not echoed. Wrangler redeploys the
+Worker itself, so there is nothing to run afterwards.
+
+Confirm the endpoint stopped answering 503:
 
 ```bash
-stripe listen --forward-to localhost:5174/api/billing/webhook
+curl -s -X POST https://coglin.lilithforge.com/api/billing/checkout \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://coglin.lilithforge.com' \
+  -d '{"amount_cents":500,"seat_count":1}'
 ```
 
-- [ ] Put `sk_test_...` in `.dev.vars` as `STRIPE_SECRET_KEY`.
-- [ ] Put the `whsec_...` that `stripe listen` printed in `.dev.vars` as
-      `STRIPE_WEBHOOK_SECRET`. **It is different every run.**
-- [ ] Leave both Turnstile vars blank locally.
-- [ ] Restart `npm run dev` so it picks up `.dev.vars`.
-- [ ] Apply the migration locally: `npm run db:migrate:local`.
+A `checkout.stripe.com` URL means it is working. `billing_not_configured` means
+the secret did not take.
 
-Then at `http://localhost:5174/pricing`, **signed out**:
+## 4. Test it with a card
 
-- [ ] Roster 12 reads **$144**. Presets switch ($6/$12/$20).
-- [ ] Pay with `4242 4242 4242 4242`, any future expiry, any CVC/ZIP.
-- [ ] The `stripe listen` terminal shows `checkout.session.completed` → 200.
-- [ ] The row landed:
+At <https://coglin.lilithforge.com/pricing>, signed out:
+
+- [ ] Roster of 12 reads **$144**.
+- [ ] Pay with `4242 4242 4242 4242`, any future expiry, any CVC and ZIP.
+- [ ] Stripe → the endpoint's delivery log shows `checkout.session.completed`
+      returning 200.
+- [ ] The row landed and says `paid`:
 
 ```bash
-npx wrangler d1 execute coglin-staging --local --command "SELECT status, amount_cents, seat_count, team_number FROM purchases ORDER BY created_at DESC LIMIT 5;"
+npx wrangler d1 execute coglin-prod --remote --env production \
+  --command "SELECT status, amount_cents, seat_count, team_number, team_name FROM purchases ORDER BY created_at DESC LIMIT 5;"
 ```
 
-- [ ] `stripe events resend <evt_id>` → still exactly one `paid` row.
-      (The handler is idempotent; this proves it end to end rather than in a test.)
+- [ ] Resend the same event from the Stripe dashboard. Still exactly one `paid`
+      row — the handler is idempotent and this proves it end to end rather than
+      in a test.
 
-## 5. Staging
+## 5. Go live
 
-- [ ] Migrate the remote staging DB: `npm run db:migrate:staging`
-- [ ] Set the secrets:
+Live mode shares nothing with test mode: separate keys, products and webhooks.
 
-```bash
-npx wrangler secret put STRIPE_SECRET_KEY     --env staging
-npx wrangler secret put STRIPE_WEBHOOK_SECRET --env staging
-npx wrangler secret put TURNSTILE_SECRET_KEY  --env staging
-```
-
-  For `STRIPE_WEBHOOK_SECRET` you need the value from the next step first, so
-  either do that step now and come back, or set it twice.
-
-- [ ] Stripe → Developers → Webhooks → **+ Add endpoint**:
-      - URL `https://coglin-staging.lilithforge.com/api/billing/webhook`
-      - Events: `checkout.session.completed` and `charge.refunded` — those two,
-        nothing else
-      - Reveal the **Signing secret** → that is staging's `STRIPE_WEBHOOK_SECRET`
-- [ ] Deploy **with the site key exported**, or Turnstile will reject everything:
-
-```bash
-VITE_TURNSTILE_SITE_KEY=0x... npm run deploy:staging
-```
-
-- [ ] Repeat the §4 browser test against `https://coglin-staging.lilithforge.com/pricing`,
-      still with the `4242` card.
-
-## 6. Production (still test mode)
-
-Same shape as §5. Doing production once on test keys before going live means the
-only thing that changes in §8 is the keys.
-
-- [ ] `npm run db:migrate:production`
-- [ ] Three `npx wrangler secret put ... --env production`
-- [ ] Stripe webhook endpoint for
-      `https://coglin.lilithforge.com/api/billing/webhook` (its own signing
-      secret — the staging one will not verify here)
-- [ ] `VITE_TURNSTILE_SITE_KEY=0x... npm run deploy:production`
-- [ ] Test with `4242` against `https://coglin.lilithforge.com/pricing`
-
-## 7. The website link
-
-The studio home page now links to `/pricing`. **Read this before deploying it:**
-
-- [ ] `~/lilithforge/website` has **no git remote and ~49 uncommitted files**.
-      Deploying `home/` ships all of that pending work, not just the one link.
-      Review `git status` and `git diff home/index.html` there and decide
-      whether you want it all to go out.
-- [ ] `npm run deploy:home` passes `--branch=feature/marketing-site`, which on
-      Cloudflare Pages produces a **preview** deployment unless that branch is
-      the project's production branch. Check the Pages project's branch setting
-      before assuming the link is live on `lilithforge.com`.
-- [ ] No `?v=N` bump needed — the change is one `<a>` reusing the existing
-      `.btn.btn-ghost`, and `styles.css` is untouched by it.
-
-## 8. Go live
-
-Live mode shares nothing with test mode — separate keys, products and webhooks.
-
-- [ ] Stripe account is activated (business profile, bank account, statement
-      descriptor). Inkubus may already have done this; check.
-- [ ] Toggle to **live mode**, redo §1 (product, `sk_live_...`).
-- [ ] Redo the webhook endpoints in live mode for **both** hostnames → two new
-      `whsec_...` values.
-- [ ] Overwrite all four secrets (`STRIPE_SECRET_KEY` and
-      `STRIPE_WEBHOOK_SECRET`, staging and production) with the live values.
-- [ ] Redeploy both environments, site key exported.
-- [ ] **Buy it yourself, smallest amount, then refund it from the dashboard.**
+- [ ] Stripe account is activated — business profile, bank account, statement
+      descriptor. Inkubus may have done this already; check before assuming.
+- [ ] Toggle to **live mode** and repeat §1 (product, `sk_live_…`) and §2 (a new
+      endpoint at the same URL, giving a new `whsec_…`).
+- [ ] Re-run the two `wrangler secret put` commands with the live values. They
+      overwrite.
+- [ ] **Buy it yourself for the minimum, then refund it from the dashboard.**
       The refund is the point: `charge.refunded` is the only handler branch a
-      test-mode card flow never reaches naturally, and this is the only time it
-      gets exercised before a real customer needs it.
+      test-mode card flow never reaches naturally, and this is the one chance to
+      exercise it before a real customer needs it.
 
-## 9. Afterwards
-
-What sold:
+## Afterwards
 
 ```bash
 npx wrangler d1 execute coglin-prod --remote --env production \
@@ -200,11 +115,12 @@ npx wrangler d1 execute coglin-prod --remote --env production \
 ```
 
 - The webhook is the only writer of `status`. A purchase stuck `pending` with a
-  real charge behind it means a delivery failed — check Developers → Webhooks →
-  that endpoint's log. On a handler error the code releases its idempotency
-  marker so Stripe's automatic retry reprocesses cleanly.
+  real charge behind it means a delivery failed — check the endpoint's log. On a
+  handler error the code releases its idempotency marker so Stripe's retry
+  reprocesses cleanly.
 - `purchases.team_number` is **self-reported and unverified**. Never join it to
   `teams`. See the header of `migrations/0007_purchases.sql`.
 - Buyer email is not stored here. It is on the Stripe Session.
-- With `STRIPE_SECRET_KEY` unset the endpoint answers 503 and the rest of the
-  app is unaffected — that is the correct state for most local work.
+- Consider a **WAF rate-limiting rule** on `/api/billing/checkout` — 5 requests
+  per minute per IP. It is a public, unauthenticated endpoint that creates
+  Stripe sessions, and unlike Turnstile it cannot be half-configured.
