@@ -16,6 +16,18 @@ import { NAV } from '../lib/nav';
  * and not walk a coach into an empty screen; it is updated by whoever builds the
  * feature, not by whoever writes the copy. So the copy cannot get ahead of the
  * product without this failing.
+ *
+ * NECESSARY BUT NOT SUFFICIENT, and that has already been proved the hard way. A
+ * nav entry covers one route, and a route can be half built. /app/portfolio is
+ * not a stub, because the candidates inbox on it genuinely works — but the
+ * 15-page planner sharing that route does not exist, and the marketing site
+ * claimed it shipped until somebody actually opened the screen.
+ * `src/routes/Portfolio.tsx:33` had been saying "the planner is not built" the
+ * whole time.
+ *
+ * So when a capability is finer-grained than its route, split it in two rather
+ * than letting the working half vouch for the missing one. No assertion here can
+ * do that for you. Open the screen.
  */
 describe('capabilities', () => {
   it('never claims a capability ships while its screen is still a stub', () => {

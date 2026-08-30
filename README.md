@@ -147,6 +147,27 @@ does not — the landing page, features, awards and the pricing comparison all
 render from it, and `capabilities.test.ts` fails if anything claims to ship
 while `nav.ts` still marks its screen a stub.
 
+## Marketing screenshots
+
+`npm run screens` seeds a local database with invented data and photographs the
+real UI into `src/marketing/screens/`. Requires `npm run dev` in another
+terminal, and python3 with Pillow for the WebP conversion.
+
+Three rules it exists to keep:
+
+- **Nothing from production.** That database is one team, six of them minors.
+  The capture script refuses any base URL that is not localhost.
+- **Nothing invented in the bundle.** `src/lib/api.ts` bans sample data from the
+  client and was right to. The seed writes SQL, a human applies it to a local
+  D1, and the only thing that ships is a picture. Verify with
+  `npm run build && grep -r "Cog Goblins" dist/client/assets/*.js`.
+- **Only screens that work.** A screenshot is the strongest claim the site
+  makes, so photographing a stub would undo every "This season" label on it.
+
+Images are WebP at 2x, ~525KB for all seven. As PNG they were 1.4MB. Regenerate
+after any UI change that shows in them; there is no test that can notice they
+have gone stale.
+
 ## Pricing during the alpha (`/pricing`)
 
 A public pay-what-you-think-is-fair page (COG-047). Three things about it are

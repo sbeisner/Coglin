@@ -23,7 +23,10 @@
  * dashboard. The only version of this that is actually safe is not importing
  * it. Verify with `npm run build && grep -r "Chesapeake" dist/`.
  *
- *   VITE_DEMO_DATA=1 npm run dev
+ * There is no VITE_DEMO_DATA flag any more either; this comment described one
+ * for a while after it was deleted. Sample data for the marketing screenshots
+ * is seeded into a LOCAL DATABASE by `scripts/seed-demo.mjs` and photographed —
+ * it never enters the bundle, which is the only arrangement that has ever held.
  *
  * Note there is no `team_id` parameter anywhere. The server derives the tenant
  * from the session's membership row (plan §6); a client that can name its own

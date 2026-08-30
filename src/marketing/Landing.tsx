@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { CallToAction, Section, Wrap } from './parts';
 import { FitMatrix } from './FitMatrix';
 import { CAPABILITIES } from './capabilities';
+import { Screenshot } from './Screenshot';
 
 const SHIPPED = CAPABILITIES.filter((c) => c.status === 'now');
 
@@ -55,6 +56,13 @@ export default function Landing() {
         </div>
       </Wrap>
 
+      {/* The product, before any more claims about it. A screenshot early is
+          the cheapest way to answer "is this real software or a landing page
+          for an idea", which is the first thing a coach is working out. */}
+      <Wrap className="pb-10">
+        <Screenshot name="boards" priority />
+      </Wrap>
+
       {/* The honest bit, placed early rather than buried. A private alpha that
           reads as a finished product is the fastest way to lose a coach who
           signs up and finds three empty screens. */}
@@ -76,7 +84,15 @@ export default function Landing() {
         <FitMatrix />
       </Section>
 
+      <Section title="A look around">
+        <div className="grid gap-6 md:grid-cols-2">
+          <Screenshot name="notes" />
+          <Screenshot name="dashboard" />
+        </div>
+      </Section>
+
       <Section title="Built around what the judges read">
+        <Screenshot name="decision-log" className="mb-6" />
         <div className="grid gap-4 sm:grid-cols-2">
           {SHIPPED.slice(0, 4).map((c) => (
             <div key={c.key} className="border-border bg-card rounded-lg border p-5">

@@ -61,11 +61,19 @@ export interface Capability {
   awards: AwardKey[];
   /** Shown in the comparison table on / and /pricing. Keep it short. */
   inMatrix?: boolean;
+  /**
+   * Key into SCREENS in `screens.ts`. A STRING, not an imported image: this
+   * module is loaded by capabilities.test.ts inside workerd, which cannot
+   * resolve a PNG import. Only `now` capabilities can have one, because only
+   * shipped screens can be photographed.
+   */
+  screenshot?: string;
 }
 
 export const CAPABILITIES: Capability[] = [
   {
     key: 'boards',
+    screenshot: 'boards',
     job: 'Task boards per sub-team',
     status: 'now',
     navTo: '/app/boards',
@@ -78,6 +86,7 @@ export const CAPABILITIES: Capability[] = [
   },
   {
     key: 'meetings',
+    screenshot: 'meetings',
     job: 'Meeting agendas, notes and attendance',
     status: 'now',
     navTo: '/app/meetings',
@@ -90,6 +99,7 @@ export const CAPABILITIES: Capability[] = [
   },
   {
     key: 'decision-log',
+    screenshot: 'decision-log',
     job: 'Decision log on every task',
     status: 'now',
     navTo: '/app/boards',
@@ -112,19 +122,37 @@ export const CAPABILITIES: Capability[] = [
     awards: ['design', 'innovate', 'reach'],
   },
   {
-    key: 'portfolio',
-    job: 'Portfolio planner — 15 pages, owners, status',
+    // Split from the planner below after the planner was found described as
+    // shipped while `src/routes/Portfolio.tsx:33` said in as many words that it
+    // is not built. What ships is the inbox: the flagging, and somewhere for the
+    // flagged things to land.
+    key: 'portfolio-candidates',
+    screenshot: 'portfolio',
+    job: 'Portfolio evidence, captured as it happens',
     status: 'now',
     navTo: '/app/portfolio',
     pm: 'no',
     docs: 'manual',
     inMatrix: true,
     detail:
-      "The portfolio is a cover plus fifteen pages, current season only. This plans them page by page: who owns it, where it has got to, and what evidence it pulls from. It plans the pages. You still design them in Canva or Slides.",
+      "Flag a note, a photo or a whole meeting while it is in front of you, and it lands in one inbox with enough context to still make sense in March. Sorting out which award each thing belongs to is a job for when the season is finished.",
+    awards: ['think', 'control', 'inspire'],
+  },
+  {
+    key: 'portfolio-planner',
+    job: 'Portfolio planner: 15 pages, owners, status',
+    status: 'soon',
+    navTo: '/app/portfolio',
+    pm: 'no',
+    docs: 'manual',
+    inMatrix: true,
+    detail:
+      "A cover plus fifteen pages, current season only, planned page by page: who owns it, where it has got to, and which evidence it pulls in. It plans the pages. You would still design them in Canva or Slides.",
     awards: ['think', 'control', 'inspire'],
   },
   {
     key: 'accounts',
+    screenshot: 'roster',
     job: 'Coach-provisioned student accounts',
     status: 'now',
     navTo: '/app/roster',

@@ -17,7 +17,9 @@
     "db:migrate:staging": "wrangler d1 migrations apply coglin-staging --remote --env staging",
     "db:migrate:production": "wrangler d1 migrations apply coglin-prod --remote --env production",
     "backup:fetch:production": "wrangler r2 object get coglin-media-prod/backups/$npm_config_date.json --file backup.json --remote",
-    "db:restore:sql": "node scripts/restore-backup.mjs backup.json --out restore.sql"
+    "db:restore:sql": "node scripts/restore-backup.mjs backup.json --out restore.sql",
+    "seed:demo": "node scripts/seed-demo.mjs --out /tmp/coglin-demo.sql && wrangler d1 execute coglin-staging --local --file /tmp/coglin-demo.sql",
+    "screens": "npm run seed:demo && node scripts/capture-screens.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -51,6 +53,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright-core": "^1.62.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",

@@ -7,6 +7,7 @@
  */
 import { CallToAction, PageIntro, Section, Wrap } from './parts';
 import { CAPABILITIES, STATUS_COPY } from './capabilities';
+import { Screenshot } from './Screenshot';
 import { cn } from '@/lib/utils';
 
 const SHIPPED = CAPABILITIES.filter((c) => c.status === 'now');
@@ -23,6 +24,11 @@ function CapabilityCard({ capability }: { capability: (typeof CAPABILITIES)[numb
       <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
         {capability.detail}
       </p>
+      {/* Only shipped capabilities carry a screenshot, and only because only
+          shipped ones can be photographed. That is the point. */}
+      {capability.screenshot && (
+        <Screenshot name={capability.screenshot} className="mt-4" />
+      )}
     </div>
   );
 }
