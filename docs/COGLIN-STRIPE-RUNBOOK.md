@@ -1,80 +1,74 @@
 # Turning on checkout
 
-Everything except Stripe itself is already live: the code is deployed, the
-`purchases` table exists on `coglin-prod`, and `/pricing` is public. What is
-missing is two secrets. **No code change, no migration, and no redeploy** —
-`wrangler secret put` rolls the Worker on its own.
+Everything except Stripe is already live. The code is deployed, the `purchases`
+table exists on `coglin-prod`, `/pricing` is public, and `STRIPE_PRODUCT_ID` is
+set. What is missing is **two secrets**.
 
-Until they are set, `POST /api/billing/checkout` answers 503 and the page tells
-the visitor "Checkout isn't switched on yet", which is the correct state, just
-not a useful one.
+No code change, no migration, no redeploy — `wrangler secret put` rolls the
+Worker on its own. Until they are set, `POST /api/billing/checkout` answers 503
+and the page tells the visitor "Checkout isn't switched on yet", which is the
+correct state, just not a useful one.
 
-Work in **test mode** through §3, then repeat §1–§2 in live mode. Going straight
-to live is possible and saves fifteen minutes, but the first real card is then
-also the first time the webhook has ever fired.
-
-> **Do not set `TURNSTILE_SECRET_KEY`.** It is paired with the build-time
-> `VITE_TURNSTILE_SITE_KEY`, and setting one without the other makes the server
-> reject every checkout with `challenge_failed` on a page that otherwise looks
-> fine. Leave both unset; the server-side amount clamp does not depend on it.
-> `worker/routes/billing.test.ts` has a test named after this exact failure.
+Work in **test mode** through §4, then repeat §1–§2 in live mode. Going straight
+to live saves fifteen minutes, but the first real card is then also the first
+time the webhook has ever fired.
 
 ---
 
-## 1. Product
+## What Coglin actually asks Stripe to do
 
-Same Stripe account as Inkubus. Toggle to **test mode** first (top right).
+Worth knowing before granting anything, because it is less than people assume.
 
-- [ ] Product catalog → **+ Add product**. Name: `Coglin — Season`.
-- [ ] The form makes you pick **One-off** and enter an amount. It does not
-      matter what you put — put `$1`. **That price is never used.** The buyer
-      sets the amount and it is passed inline on each Checkout Session, so
-      nothing in the code ever reads a Price object. Save.
-- [ ] Copy the **product id** (`prod_…`) from the product's page. It goes in
-      `wrangler.jsonc` as `STRIPE_PRODUCT_ID`, alongside the other non-secret
-      config, the way Inkubus keeps its `PRICE_*` ids.
+The entire codebase makes **one** Stripe API call: `checkout.sessions.create`
+(`worker/routes/billing.ts`). That is the whole surface.
 
-      Skipping this works: the code falls back to describing the product inline.
-      But Stripe then creates a NEW product for every purchase, so after a
-      season the catalog is fifty identical rows and revenue-by-product tells
-      you nothing. Two minutes now, or a messy catalog later.
+- Webhook signature verification is local HMAC over the raw request body. It
+  makes no API call.
+- Both webhook handlers read `event.data.object` and write to D1. No API call.
+- No customers are created, no subscriptions, no refunds issued, nothing read
+  back.
 
-- [ ] Developers → API keys → **Create restricted key**. Prefer this over the
-      account secret key, which is what an earlier version of this runbook said
-      to reuse from Inkubus.
+So the key below is scoped to almost nothing, and that is not a compromise.
 
-      The whole codebase makes exactly ONE Stripe API call —
-      `checkout.sessions.create`. Signature verification is local HMAC and
-      touches no API, and both webhook handlers read the event payload and write
-      to D1. So the key needs almost nothing:
+---
 
-      | Resource | Permission | Why |
-      |---|---|---|
-      | Checkout Sessions | **Write** | The one call the code makes |
-      | Products | **Read** | `price_data.product` references `STRIPE_PRODUCT_ID` and Stripe resolves it |
+## 1. Restricted API key
 
-      Everything else: **None**.
+Toggle Stripe to **test mode** (top right), then Developers → API keys →
+**Create restricted key**. Name it `Coglin`.
 
-      This matters because `/api/billing/checkout` is the app's only public,
-      unauthenticated endpoint. With a full account key, a leak means refunds,
-      payouts, customer data and Inkubus's subscriptions. With this one it means
-      somebody can create checkout sessions, which is what the endpoint already
-      does for anyone who asks.
+| Resource | Permission |
+|---|---|
+| **Checkout Sessions** | Write |
+| **Products** | Read |
+| everything else | None |
 
-      Restricted keys start `rk_test_…` / `rk_live_…` and drop in wherever an
-      `sk_` would; no code change. They are mode-specific like everything else
-      here, so live mode needs its own.
+Products **read** — not write — because `price_data.product` references
+`STRIPE_PRODUCT_ID` and Stripe resolves it. (Write would be needed only on the
+fallback path, where Stripe mints a product per sale.)
 
-      If a scope turns out to be missing, Stripe says so explicitly —
-      "This API key does not have the required permissions" naming the resource
-      — rather than failing quietly. Add it and re-run the curl in §3.
+Copy the key. It starts `rk_test_…` and goes wherever an `sk_` would; the SDK
+does not care and there is no code change.
+
+> **Why restricted rather than the account secret key.**
+> `/api/billing/checkout` is the app's only public, unauthenticated endpoint. A
+> leaked account key reaches refunds, payouts, customer data and Inkubus's live
+> subscriptions — the two products share a Stripe account. A leaked restricted
+> key lets somebody create checkout sessions, which is what that endpoint does
+> for anyone who asks anyway.
+
+If a scope turns out to be missing, Stripe says so explicitly — *"This API key
+does not have the required permissions"*, naming the resource. It does not fail
+quietly. Add it and re-run the check in §3.
 
 ## 2. Webhook endpoint
 
-Developers → **Webhooks** (newer Stripe dashboards call this **Event
-destinations**) → **+ Add endpoint**. This is a *new* endpoint even though the
-account is shared: Inkubus's points at a different hostname and its signing
-secret will not verify anything sent here.
+Developers → **Webhooks** (newer dashboards call this **Event destinations**) →
+**+ Add endpoint**.
+
+This is a *new* endpoint even though the Stripe account is shared: Inkubus's
+points at a different hostname, and its signing secret will not verify anything
+sent here.
 
 - [ ] Endpoint URL:
 
@@ -87,21 +81,24 @@ secret will not verify anything sent here.
 
 - [ ] Reveal the **Signing secret** (`whsec_…`).
 
-## 3. Set the secrets
+The signing secret is not an API key and has nothing to do with §1. Restricting
+the key does not restrict this.
+
+## 3. Set the two secrets
 
 ```bash
 cd ~/lilithforge/coglin && nvm use
-npx wrangler secret put STRIPE_SECRET_KEY --env production      # rk_test_… or sk_test_…
+npx wrangler secret put STRIPE_SECRET_KEY --env production      # rk_test_…
 npx wrangler secret put STRIPE_WEBHOOK_SECRET --env production  # whsec_…
 ```
 
-`STRIPE_PRODUCT_ID` is **not** a secret and does not go here — it belongs in the
-`vars` block of `wrangler.jsonc` and needs a redeploy, unlike the two above.
+Each prompts for the value; pastes are not echoed. Wrangler redeploys the Worker
+itself, so there is nothing to run afterwards.
 
-Each prompts for the value and pastes are not echoed. Wrangler redeploys the
-Worker itself, so there is nothing to run afterwards.
+The variable is still called `STRIPE_SECRET_KEY` because that is what the Stripe
+SDK's constructor takes. A restricted key is what goes in it.
 
-Confirm the endpoint stopped answering 503:
+Confirm it stopped answering 503:
 
 ```bash
 curl -s -X POST https://coglin.lilithforge.com/api/billing/checkout \
@@ -110,14 +107,15 @@ curl -s -X POST https://coglin.lilithforge.com/api/billing/checkout \
   -d '{"amount_cents":500,"seat_count":1}'
 ```
 
-A `checkout.stripe.com` URL means it is working. `billing_not_configured` means
-the secret did not take.
+- A `checkout.stripe.com` URL — working.
+- `billing_not_configured` — the secret did not take.
+- A permissions error — a scope is missing from §1.
 
-## 4. Test it with a card
+## 4. Test with a card
 
 At <https://coglin.lilithforge.com/pricing>, signed out:
 
-- [ ] Roster of 12 reads **$144**.
+- [ ] A roster of 12 reads **$144**.
 - [ ] Pay with `4242 4242 4242 4242`, any future expiry, any CVC and ZIP.
 - [ ] Stripe → the endpoint's delivery log shows `checkout.session.completed`
       returning 200.
@@ -128,24 +126,51 @@ npx wrangler d1 execute coglin-prod --remote --env production \
   --command "SELECT status, amount_cents, seat_count, team_number, team_name FROM purchases ORDER BY created_at DESC LIMIT 5;"
 ```
 
-- [ ] Resend the same event from the Stripe dashboard. Still exactly one `paid`
-      row — the handler is idempotent and this proves it end to end rather than
+- [ ] Resend that same event from the Stripe dashboard. Still exactly one `paid`
+      row — the handler is idempotent, and this proves it end to end rather than
       in a test.
 
 ## 5. Go live
 
-Live mode shares nothing with test mode: separate keys, products and webhooks.
+Live mode shares nothing with test mode. **Three things change, and one of them
+behaves differently from the other two:**
 
-- [ ] Stripe account is activated — business profile, bank account, statement
-      descriptor. Inkubus may have done this already; check before assuming.
-- [ ] Toggle to **live mode** and repeat §1 (product, `sk_live_…`) and §2 (a new
-      endpoint at the same URL, giving a new `whsec_…`).
+| What | Where | Redeploy? |
+|---|---|---|
+| `rk_live_…` restricted key | `wrangler secret put` | No |
+| `whsec_…` from a live-mode endpoint | `wrangler secret put` | No |
+| `STRIPE_PRODUCT_ID` | `wrangler.jsonc` | **Yes** |
+
+That third row is the one that gets missed. A `prod_` id created in test mode
+does not exist in live mode, so a live key against the test product fails every
+checkout with *"No such product"* — and unlike the secrets, changing it needs
+`npm run deploy:production`.
+
+- [ ] Stripe account is activated: business profile, bank account, statement
+      descriptor. Inkubus may have done this already; check rather than assume.
+- [ ] Toggle to **live mode**, then redo §1 (a live restricted key, same two
+      scopes) and §2 (a new endpoint at the same URL, giving a new `whsec_`).
+- [ ] Create the product in live mode and put its `prod_` id in `wrangler.jsonc`
+      for both `staging` and `production`, then deploy.
 - [ ] Re-run the two `wrangler secret put` commands with the live values. They
       overwrite.
 - [ ] **Buy it yourself for the minimum, then refund it from the dashboard.**
       The refund is the point: `charge.refunded` is the only handler branch a
       test-mode card flow never reaches naturally, and this is the one chance to
-      exercise it before a real customer needs it.
+      exercise it before a customer needs it.
+
+---
+
+## Do not set TURNSTILE_SECRET_KEY
+
+It is paired with the build-time `VITE_TURNSTILE_SITE_KEY`. Setting one without
+the other makes the server reject **every** checkout with `challenge_failed`, on
+a page that otherwise looks completely fine. Leave both unset; the server-side
+amount clamp does not depend on either. `worker/routes/billing.test.ts` has a
+test named after this exact failure.
+
+If you want a control that cannot be half-configured, add a **WAF rate-limiting
+rule** on `/api/billing/checkout` — 5 requests per minute per IP.
 
 ## Afterwards
 
@@ -160,7 +185,5 @@ npx wrangler d1 execute coglin-prod --remote --env production \
   reprocesses cleanly.
 - `purchases.team_number` is **self-reported and unverified**. Never join it to
   `teams`. See the header of `migrations/0007_purchases.sql`.
-- Buyer email is not stored here. It is on the Stripe Session.
-- Consider a **WAF rate-limiting rule** on `/api/billing/checkout` — 5 requests
-  per minute per IP. It is a public, unauthenticated endpoint that creates
-  Stripe sessions, and unlike Turnstile it cannot be half-configured.
+- Buyer email is not stored. It is on the Stripe Session. Reading it back would
+  need Checkout Sessions **read** added to the key in §1.
