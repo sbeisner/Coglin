@@ -1,9 +1,17 @@
 import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
 import './index.css';
 import { AppShell } from '@/components/AppShell';
 import { SessionProvider, useSessionState } from '@/lib/session';
+import { MarketingShell } from '@/marketing/MarketingShell';
+import Landing from '@/marketing/Landing';
+import Features from '@/marketing/Features';
+import Awards from '@/marketing/Awards';
+import Faq from '@/marketing/Faq';
+import About from '@/marketing/About';
+import Pricing from '@/marketing/Pricing';
+import NotFound from '@/marketing/NotFound';
 import Dashboard from '@/routes/Dashboard';
 import Boards from '@/routes/Boards';
 import Roster from '@/routes/Roster';
@@ -47,17 +55,76 @@ function RequireSession() {
 function RedirectIfSignedIn({ children }: { children: ReactNode }) {
   const { status } = useSessionState();
   if (status === 'loading') return null;
-  if (status === 'authenticated') return <Navigate to="/" replace />;
+  if (status === 'authenticated') return <Navigate to="/app" replace />;
   return <>{children}</>;
 }
+
+/**
+ * Bookmarks from before the app moved under /app.
+ *
+ * The alpha team has been using this all season and has links saved to
+ * `/boards` and `/meetings/<id>` — some of them pasted into their own team
+ * Discord. Breaking those to tidy up the URL space would be a self-inflicted
+ * support ticket during a competition season, so every old path forwards, query
+ * string and all.
+ *
+ * Registered per-path rather than as a catch-all: an unrecognised URL should
+ * reach the marketing 404, not be silently rewritten into the app where it will
+ * 404 again one level deeper.
+ */
+function LegacyAppRedirect() {
+  const { pathname, search } = useLocation();
+  return <Navigate to={`/app${pathname}${search}`} replace />;
+}
+
+/**
+ * Every path that used to be an app screen.
+ *
+ * `/awards` is deliberately ABSENT. It is now the public award-breakdown page,
+ * and the in-app tracker at /app/awards is still a stub (nav.ts marks it
+ * `stub: true`, api.ts returns an empty array), so nobody has a bookmark to it
+ * worth preserving. Adding it here would take the marketing page off the air.
+ */
+const LEGACY_APP_PATHS = [
+  '/boards',
+  '/roster',
+  '/outreach',
+  '/portfolio',
+  '/budget',
+  '/calendar',
+  '/debug',
+  '/meetings',
+  '/meetings/:meetingId',
+  '/notes',
+  '/notes/:docId',
+];
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <SessionProvider>
         <Routes>
-          {/* Outside the shell: neither has a signed-in user, so neither can
-              draw a sidebar with a team in it. */}
+          {/* ---------- Public marketing ----------
+              The root is a landing page, not a login wall. lilithforge.com has
+              linked here as "Enter Coglin" since before there was anything to
+              enter, and sending a stranger straight to a password field is a
+              poor answer to that link. */}
+          <Route element={<MarketingShell />}>
+            <Route path="/" element={<Landing />} />
+            <Route path="/features" element={<Features />} />
+            <Route path="/awards" element={<Awards />} />
+            <Route path="/pricing" element={<Pricing />} />
+            <Route path="/faq" element={<Faq />} />
+            <Route path="/about" element={<About />} />
+            {/* Anything unrecognised is a marketing 404, because by this point
+                the app routes and the legacy redirects have both had their
+                chance. */}
+            <Route path="*" element={<NotFound />} />
+          </Route>
+
+          {/* ---------- Public, but no marketing chrome ----------
+              A header offering "Pricing" and "Features" above a password field
+              is an invitation to wander off mid-sign-in. */}
           <Route
             path="/login"
             element={
@@ -74,36 +141,48 @@ createRoot(document.getElementById('root')!).render(
               </RedirectIfSignedIn>
             }
           />
+          {/* Invite mail points at this path (worker/lib/email.ts builds
+              `${APP_BASE_URL}/invite/<token>`). It did not move and must not. */}
           <Route path="/invite/:token" element={<AcceptInvite />} />
 
-          <Route element={<RequireSession />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/boards" element={<Boards />} />
-            <Route path="/outreach" element={<Outreach />} />
-            <Route path="/roster" element={<Roster />} />
-            <Route path="/awards" element={<Placeholder />} />
-            <Route path="/portfolio" element={<Portfolio />} />
+          {/* The pricing page was /support for one afternoon before the framing
+              was corrected — it sells a product, it does not collect donations. */}
+          <Route path="/support" element={<Navigate to="/pricing" replace />} />
+
+          {/* ---------- The application ---------- */}
+          <Route path="/app" element={<RequireSession />}>
+            <Route index element={<Dashboard />} />
+            <Route path="boards" element={<Boards />} />
+            <Route path="outreach" element={<Outreach />} />
+            <Route path="roster" element={<Roster />} />
+            <Route path="awards" element={<Placeholder />} />
+            <Route path="portfolio" element={<Portfolio />} />
             {/* /calendar was a stub; the calendar is now a view on /meetings.
                 A redirect rather than a deletion, because the catch-all below
                 renders Placeholder — so a stale bookmark would land on "not
                 built yet" for a feature that does exist. */}
             <Route
-              path="/calendar"
-              element={<Navigate to="/meetings?view=calendar" replace />}
+              path="calendar"
+              element={<Navigate to="/app/meetings?view=calendar" replace />}
             />
-            <Route path="/budget" element={<Placeholder />} />
-            <Route path="/meetings" element={<Meetings />} />
+            <Route path="budget" element={<Placeholder />} />
+            <Route path="meetings" element={<Meetings />} />
             {/* The app's first nested route. AppShell resolves its nav label by
                 prefix for this reason — an exact match leaves the mobile title
                 bar saying "Coglin" on the screen a student takes notes on. */}
-            <Route path="/meetings/:meetingId" element={<Meeting />} />
-            <Route path="/notes" element={<Notes />} />
-            <Route path="/notes/:docId" element={<Notes />} />
-            <Route path="/debug" element={<Debug />} />
-            {/* Any unknown path still renders the shell, which keeps the
-                not_found_handling SPA-fallback check meaningful. */}
+            <Route path="meetings/:meetingId" element={<Meeting />} />
+            <Route path="notes" element={<Notes />} />
+            <Route path="notes/:docId" element={<Notes />} />
+            <Route path="debug" element={<Debug />} />
+            {/* Any unknown path under /app still renders the shell, which keeps
+                the not_found_handling SPA-fallback check meaningful. */}
             <Route path="*" element={<Placeholder />} />
           </Route>
+
+          {/* ---------- Bookmarks from before the move ---------- */}
+          {LEGACY_APP_PATHS.map((path) => (
+            <Route key={path} path={path} element={<LegacyAppRedirect />} />
+          ))}
         </Routes>
       </SessionProvider>
     </BrowserRouter>

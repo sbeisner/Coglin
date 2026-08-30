@@ -75,7 +75,7 @@ function MeetingRow({ meeting, now }: { meeting: MeetingSummary; now: number }) 
   return (
     <li>
       <Link
-        to={`/meetings/${meeting.id}`}
+        to={`/app/meetings/${meeting.id}`}
         className={cn(
           'focus-visible:ring-ring block px-4 py-3.5 focus-visible:ring-2 focus-visible:outline-none',
           cancelled && 'opacity-60',

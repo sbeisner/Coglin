@@ -65,7 +65,7 @@ export default function Meeting() {
     setReloadKey((k) => k + 1);
     // Straight into the page it just seeded. On a second press doc_id is null and
     // the caller is already looking at the tree, so staying put is correct.
-    if (result.doc_id) navigate(`/notes/${result.doc_id}`);
+    if (result.doc_id) navigate(`/app/notes/${result.doc_id}`);
   }
 
   /** A fresh page on this meeting, opened ready to type. */
@@ -74,7 +74,7 @@ export default function Meeting() {
       meeting_id: meetingId as string,
       title: 'Notes',
     });
-    navigate(`/notes/${doc.id}`);
+    navigate(`/app/notes/${doc.id}`);
   }
 
 
@@ -94,7 +94,7 @@ export default function Meeting() {
           title="That meeting is not here."
           aside="It may have been deleted, or it belongs to another team."
           action={
-            <Button variant="outline" size="sm" onClick={() => navigate('/meetings')}>
+            <Button variant="outline" size="sm" onClick={() => navigate('/app/meetings')}>
               Back to meetings
             </Button>
           }
@@ -117,7 +117,7 @@ export default function Meeting() {
     <>
       <div className="border-border border-b px-4 py-5 md:px-8">
         <Link
-          to="/meetings"
+          to="/app/meetings"
           className="text-muted-foreground focus-visible:ring-ring inline-flex min-h-11 items-center gap-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
         >
           <ArrowLeft className="size-4" aria-hidden />
@@ -149,7 +149,7 @@ export default function Meeting() {
             {/* Zero renders nothing: "0 flagged" is a scolding, not information. */}
             {flaggedCount > 0 && (
               <Link
-                to="/portfolio"
+                to="/app/portfolio"
                 className="text-primary-ink focus-visible:ring-ring inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 focus-visible:ring-2 focus-visible:outline-none"
               >
                 <BookmarkCheck className="size-4" aria-hidden />
@@ -268,7 +268,7 @@ export default function Meeting() {
               {docs.map((doc) => (
                 <li key={doc.id}>
                   <Link
-                    to={`/notes/${doc.id}`}
+                    to={`/app/notes/${doc.id}`}
                     className="focus-visible:ring-ring flex min-h-11 items-center gap-2 px-4 py-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
                   >
                     <FileText className="text-muted-foreground size-4 shrink-0" aria-hidden />

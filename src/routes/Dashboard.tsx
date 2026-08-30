@@ -172,7 +172,7 @@ export default function Dashboard() {
             <div className="mb-3 flex items-baseline justify-between">
               <h2 className="u-eyebrow">Award readiness</h2>
               <Link
-                to="/awards"
+                to="/app/awards"
                 className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
               >
                 Open tracker
@@ -225,7 +225,7 @@ export default function Dashboard() {
               <div className="mb-3 flex items-baseline justify-between">
                 <h2 className="u-eyebrow">This month</h2>
                 <Link
-                  to="/meetings?view=calendar"
+                  to="/app/meetings?view=calendar"
                   className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
                 >
                   Open calendar
@@ -245,7 +245,7 @@ export default function Dashboard() {
                   density="compact"
                   selectedDay={null}
                   onSelectDay={(day) =>
-                    navigate(`/meetings?view=calendar&day=${day}`)
+                    navigate(`/app/meetings?view=calendar&day=${day}`)
                   }
                 />
               )}
@@ -257,7 +257,7 @@ export default function Dashboard() {
                 {meetings.status === 'loading' && <Skeleton className="h-16" />}
                 {nextMeeting && (
                   <Link
-                    to={`/meetings/${nextMeeting.id}`}
+                    to={`/app/meetings/${nextMeeting.id}`}
                     className="focus-visible:ring-ring block rounded focus-visible:ring-2 focus-visible:outline-none"
                   >
                     <div className="u-display text-heading text-base">
@@ -343,7 +343,7 @@ export default function Dashboard() {
                         aria-hidden
                       />
                       <Link
-                        to={`/meetings/${item.meeting_id}`}
+                        to={`/app/meetings/${item.meeting_id}`}
                         className="focus-visible:ring-ring min-w-0 flex-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
                       >
                         {item.text}

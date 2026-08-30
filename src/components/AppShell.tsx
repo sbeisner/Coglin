@@ -11,16 +11,35 @@ import { cn } from '@/lib/utils';
 const PRIMARY = NAV.filter((n) => n.primary);
 
 /**
+ * The dashboard's path, and the reason it needs naming.
+ *
+ * Every app route is nested under it, so a NavLink pointing here prefix-matches
+ * the whole product and the dashboard renders as active on every screen. It has
+ * to opt out with `end`, in BOTH the sidebar and the mobile tab bar — a constant
+ * rather than the literal twice, because the two call sites are 100 lines apart
+ * and the bug is invisible until you look at a second screen.
+ *
+ * This did not bite when the dashboard was at `/`: react-router only treats a
+ * prefix as a match when the next character is a separator, and for `/` the next
+ * character of `/boards` is `b`. Moving to `/app` made `/app/boards` a genuine
+ * segment match, which is correct behaviour and exactly what `end` is for.
+ */
+const APP_ROOT = '/app';
+
+/**
  * The nav entry a path belongs to, matching by prefix rather than equality.
  *
  * Meetings introduced the app's first nested route. With an exact match
  * `/meetings/<id>` matches nothing, so a student taking notes on a phone sees
  * the shell titled "Coglin" — no error, just a screen that has forgotten what
- * it is. `/` is special-cased because every path starts with it.
+ * it is. `/app` is special-cased because every app path starts with it — the
+ * dashboard would otherwise match every screen in the product.
  */
 function navItemFor(pathname: string) {
   return NAV.find((n) =>
-    n.to === '/' ? pathname === '/' : pathname === n.to || pathname.startsWith(`${n.to}/`),
+    n.to === APP_ROOT
+      ? pathname === APP_ROOT
+      : pathname === n.to || pathname.startsWith(`${n.to}/`),
   );
 }
 
@@ -125,7 +144,7 @@ export function AppShell() {
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
+            end={to === APP_ROOT}
             className={({ isActive }) =>
               cn(
                 // 44px minimum touch target — pit day, cold hands, gloves.
@@ -238,7 +257,7 @@ function SideLink({
   return (
     <NavLink
       to={to}
-      end={to === '/'}
+      end={to === APP_ROOT}
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(

@@ -81,7 +81,7 @@ export default function Signup() {
       // dashboard rather than being bounced to a login screen to retype what
       // they just chose.
       await refresh();
-      void navigate('/');
+      void navigate('/app');
     } catch {
       setError('Could not reach Coglin. Check your connection.');
     } finally {

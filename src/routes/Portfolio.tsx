@@ -235,7 +235,7 @@ export default function Portfolio() {
                   {candidate.source_type === 'note_doc' &&
                     !candidate.source_deleted && (
                       <Link
-                        to={`/notes/${candidate.source_id}`}
+                        to={`/app/notes/${candidate.source_id}`}
                         className="text-primary-ink focus-visible:ring-ring mt-2 inline-flex min-h-11 items-center text-xs focus-visible:ring-2 focus-visible:outline-none"
                       >
                         {preview?.title ?? 'Open the document'} →
@@ -243,7 +243,7 @@ export default function Portfolio() {
                     )}
                   {candidate.source_type !== 'note_doc' && meetingId && (
                     <Link
-                      to={`/meetings/${meetingId}`}
+                      to={`/app/meetings/${meetingId}`}
                       className="text-primary-ink focus-visible:ring-ring mt-2 inline-flex min-h-11 items-center text-xs focus-visible:ring-2 focus-visible:outline-none"
                     >
                       {preview?.meeting_title ?? 'Open the meeting'} →

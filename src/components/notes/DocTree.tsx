@@ -377,7 +377,7 @@ function Row({
         )}
 
         <Link
-          to={`/notes/${doc.id}`}
+          to={`/app/notes/${doc.id}`}
           className="focus-visible:ring-ring relative flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded text-sm focus-visible:ring-2 focus-visible:outline-none md:min-h-8"
         >
           {/* The same brand bar a flagged block used to get in the gutter.

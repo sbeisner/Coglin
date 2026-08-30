@@ -8,9 +8,9 @@ import { PageHeader } from '@/components/PageHeader';
  * real ones — most of what makes a skeleton judgeable is being able to walk it.
  */
 const NOTES: Record<string, string> = {
-  '/awards':
+  '/app/awards':
     'Per-award criteria checklists from the Competition Manual §6, each item linked to evidence, with the Inspire triad view.',
-  '/budget':
+  '/app/budget':
     'Income and expense lines, sponsor tiers and thank-you status — the progress tracking Sustain requires.',
 };
 

@@ -109,3 +109,80 @@ leaking. A cross-team read is the one bug this codebase cannot ship.
 Users are 12–18. Students are **coach-provisioned**: no self-signup, no email,
 login is `team_number + handle + password`. Student PII is limited to a display
 name and a handle. See the plan's §6 before touching auth.
+
+## Information architecture
+
+One Worker serves three things at `coglin.lilithforge.com`, split by path:
+
+| Path | What | Gate |
+|---|---|---|
+| `/`, `/features`, `/awards`, `/pricing`, `/faq`, `/about` | Marketing site, in `MarketingShell` | public |
+| `/login`, `/signup`, `/invite/:token` | Auth, no marketing chrome | public |
+| `/app`, `/app/boards`, `/app/meetings/:id`, … | The application, in `AppShell` | session |
+
+The root used to redirect anonymous visitors to `/login`, which made a login
+form the public face of a URL that lilithforge.com already advertises. The app
+moved under `/app` to free it.
+
+Two consequences worth knowing:
+
+- **Every pre-move bookmark is redirected.** `src/main.tsx` lists the old app
+  paths and forwards them to `/app/...` with params and query intact. The alpha
+  team was mid-season when this landed; breaking their links to tidy the URL
+  space was not an option. `/awards` is deliberately NOT in that list — it is
+  now the public award-breakdown page.
+- **`/app` is a prefix, so nav links must opt out of prefix matching.** The
+  dashboard sits at `/app` and would otherwise render as active on every screen.
+  `AppShell.tsx` names this `APP_ROOT` and passes `end` in both the sidebar and
+  the mobile tab bar. This did not bite at `/` because react-router only counts
+  a prefix when the next character is a separator.
+
+**Marketing lives in the SPA**, so a crawler gets an empty `#root` until JS runs
+and `index.html`'s meta tags are global rather than per-route. That is an
+accepted trade for an invite-only alpha; if organic search ever matters, the fix
+is a Vite multi-page build or per-path `HTMLRewriter` in the Worker.
+
+`src/marketing/capabilities.ts` is the single source for what ships and what
+does not — the landing page, features, awards and the pricing comparison all
+render from it, and `capabilities.test.ts` fails if anything claims to ship
+while `nav.ts` still marks its screen a stub.
+
+## Pricing during the alpha (`/pricing`)
+
+A public pay-what-you-think-is-fair page (COG-047). Three things about it are
+worth knowing before touching it.
+
+**It is a product being sold, not a donation drive.** The customer names the
+price; that does not make it a gift. "Gift", "donate", "support us" and "chip
+in" do not belong in this feature — not in the copy, not in the table names, not
+in how the rows get talked about later. A team that pays $80 for a season bought
+a season for $80. Charity framing would also make the pricing evidence useless:
+what someone donates says nothing about what they would pay.
+
+**The price is theirs because the product is unfinished.** Plan §7 already knows
+the number — $149 list, $99 verified, for 2027-28. Until the award tracker and
+outreach rollups ship, the teams running a season on this are better placed to
+price it than we are. The recommendation is **$12 per seat per season**, which
+puts a 12-seat roster at $144, near that list price. Access is not gated on
+payment during the alpha (plan §8); "not gated" is a separate decision from "not
+sold".
+
+**It is the only public part of the API.** `/api/billing/checkout` and
+`/api/billing/webhook` take no session — a coach can buy before they have an
+account, and Stripe posts the webhook with no session at all. Because neither
+can resolve a tenant, neither touches a tenant table. `purchases.team_number` is
+a self-reported string typed into a form and must never be joined to `teams`;
+the header of `migrations/0007_purchases.sql` explains why at length.
+
+The amount is clamped server-side to [$5, $2000] in `worker/lib/billing.ts`. The
+browser sends a money amount, so the browser does not get to decide it.
+
+**Turnstile is two settings, not one.** `TURNSTILE_SECRET_KEY` (Worker secret)
+and `VITE_TURNSTILE_SITE_KEY` (build-time, ships in the bundle) are a pair:
+the server rejects a missing token whenever the secret is set, and the page only
+sends one when the site key was built in. Setting either alone takes checkout
+down with `challenge_failed`. There is a test for exactly this.
+
+Setup, secrets and the go-live checklist: `docs/COGLIN-STRIPE-RUNBOOK.md`. With
+`STRIPE_SECRET_KEY` unset the endpoint answers 503 and the rest of the app is
+unaffected, which is the correct state for most local work.
