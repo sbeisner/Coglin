@@ -737,6 +737,31 @@ export function deleteMemberPhoto(memberId: string): Promise<{ ok: true }> {
   return send(`/api/members/${memberId}/photo`, 'DELETE');
 }
 
+// ------------------------------------------------------------ season purchase
+
+/**
+ * Start a Stripe Checkout Session for one season, at the price the buyer set
+ * (COG-047).
+ *
+ * The one call in this module that works signed OUT — /pricing is public, so a
+ * coach can buy before they have an account. Consequently there is no tenant
+ * here and no team_id: `team_number` and `team_name` are self-reported strings
+ * typed into a form, and the server never joins them to a real team. See the
+ * header of migrations/0007_purchases.sql.
+ *
+ * `amount_cents` is a request, not an instruction. The server clamps it to
+ * [$5, $2000] and the response echoes back what it actually used.
+ */
+export function startPurchase(input: {
+  amount_cents: number;
+  seat_count: number;
+  team_number?: number;
+  team_name?: string;
+  turnstile_token?: string;
+}): Promise<{ url: string; amount_cents: number }> {
+  return send('/api/billing/checkout', 'POST', input);
+}
+
 // --------------------------------------------------------------------------
 // Not built yet. Each returns nothing until its feature lands (COG-014
 // outreach, COG-013 awards, COG-016 calendar), at which point the body becomes

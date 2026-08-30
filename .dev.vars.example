@@ -14,6 +14,28 @@ ALPHA_SIGNUP_CODE=
 # walk the accept flow. Shared with Inkubus — see inkubus/backend/.env.local.
 RESEND_API_KEY=
 
-# Phase 5 (COG-023) — not needed for the alpha.
-# STRIPE_SECRET_KEY=
-# STRIPE_WEBHOOK_SECRET=
+# Stripe, for the pay-what-you-think-is-fair page at /pricing (COG-047). Leave
+# blank and the pay button answers 503 — the rest of the app does not care.
+#
+# The secret key is SHARED with Inkubus (website/inkubus/.dev.vars). The webhook
+# secret is NOT: it belongs to one endpoint. Locally it is whatever
+#   stripe listen --forward-to localhost:5174/api/billing/webhook
+# prints when you start it, and it changes each run.
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+
+# Cloudflare Turnstile, guarding /api/billing/checkout — a public endpoint that
+# creates Stripe sessions is a card-testing target. Blank means the challenge is
+# skipped, which is what you want locally.
+#
+# PAIRED WITH VITE_TURNSTILE_SITE_KEY. The page only sends a token when the site
+# key is built into the bundle, and the server rejects a missing token whenever
+# this secret is set — so setting one without the other makes every checkout
+# fail with `challenge_failed`. Set both or neither.
+TURNSTILE_SECRET_KEY=
+
+# Public Turnstile site key. Read at BUILD time by Vite (import.meta.env), not at
+# runtime, so changing it needs a rebuild — and on staging/production it must be
+# present in the environment that runs `npm run build`, not set as a Worker
+# secret. Not a secret: it ships in the client bundle.
+VITE_TURNSTILE_SITE_KEY=

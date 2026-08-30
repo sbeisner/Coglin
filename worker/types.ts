@@ -26,4 +26,25 @@ export type Bindings = {
    * behaviour in local dev and a survivable one in production.
    */
   RESEND_API_KEY?: string;
+  /**
+   * Stripe, for the alpha pricing page (COG-047). Optional in the same sense as
+   * RESEND_API_KEY above: unset means the /pricing page's pay button answers 503
+   * and everything else in the app is unaffected. Access is not gated on payment
+   * during the alpha, so a Coglin deploy with no billing configured is valid.
+   *
+   * The secret key is SHARED with Inkubus. The webhook secret is not — it belongs
+   * to the endpoint registered for this hostname and no other.
+   */
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  /**
+   * Cloudflare Turnstile, guarding the one public endpoint that creates Stripe
+   * sessions. Unset means the challenge is skipped, not that requests are denied
+   * — the server-side amount clamp is the control that does not depend on
+   * configuration being complete.
+   *
+   * PAIRED with the build-time VITE_TURNSTILE_SITE_KEY. Setting this without
+   * that one rejects every checkout, because the page never sends a token.
+   */
+  TURNSTILE_SECRET_KEY?: string;
 };

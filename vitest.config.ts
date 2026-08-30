@@ -32,6 +32,12 @@ export default defineConfig({
             // invite tests are asserting on. The value is never used: the
             // tests intercept every api.resend.com request.
             RESEND_API_KEY: 'test-resend-key',
+            // Billing (COG-047). Both must be set or the routes short-circuit
+            // to 503 before reaching the logic under test. Every api.stripe.com
+            // request is intercepted by stubStripe(); the webhook secret is a
+            // real HMAC key that the tests sign fixtures with.
+            STRIPE_SECRET_KEY: 'sk_test_coglin',
+            STRIPE_WEBHOOK_SECRET: 'whsec_test_coglin',
           },
         },
       };

@@ -160,3 +160,75 @@ export function stubResend(): () => void {
     globalThis.fetch = realFetch;
   };
 }
+
+/**
+ * Intercept every api.stripe.com request and answer with a fixed Checkout
+ * Session. Same shape as stubResend above.
+ *
+ * Returns the list of request bodies seen, so a test can assert on what we
+ * actually asked Stripe for — the amount clamp is only meaningful if you check
+ * the number that crossed the wire, not the one we echoed back to the client.
+ */
+export function stubStripe(sessionId = 'cs_test_1'): {
+  restore: () => void;
+  requests: URLSearchParams[];
+} {
+  const realFetch = globalThis.fetch;
+  const requests: URLSearchParams[] = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (!url.startsWith('https://api.stripe.com')) {
+      return realFetch(input as RequestInfo, init);
+    }
+    // The Stripe SDK posts form-encoded bodies.
+    requests.push(new URLSearchParams(String(init?.body ?? '')));
+    return new Response(
+      JSON.stringify({
+        id: sessionId,
+        object: 'checkout.session',
+        url: `https://checkout.stripe.com/c/pay/${sessionId}`,
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  }) as typeof fetch;
+
+  return {
+    restore: () => {
+      globalThis.fetch = realFetch;
+    },
+    requests,
+  };
+}
+
+/**
+ * Sign a webhook payload the way Stripe does: HMAC-SHA256 over
+ * `<timestamp>.<payload>` keyed by the whsec, rendered as `t=...,v1=...`.
+ *
+ * Written out rather than reached for from the SDK because the point of the
+ * webhook tests is that OUR verification accepts a genuine signature and
+ * rejects a forged one. A helper that shares code with the verifier would prove
+ * only that the two agree.
+ */
+export async function stripeSignature(
+  payload: string,
+  secret: string,
+  timestamp = Math.floor(Date.now() / 1000),
+): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const mac = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`${timestamp}.${payload}`),
+  );
+  const hex = [...new Uint8Array(mac)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `t=${timestamp},v1=${hex}`;
+}
