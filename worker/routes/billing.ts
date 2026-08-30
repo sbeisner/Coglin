@@ -87,13 +87,21 @@ billing.post('/checkout', sameOriginOnly, async (c) => {
     mode: 'payment',
     line_items: [
       {
-        // Inline price_data, not a Price id: the amount is the payer's, so
-        // there is nothing to look up. `product_data` names the charge on their
-        // statement and on the hosted page.
+        // Inline price_data, never a Price id: the amount is the customer's,
+        // so there is nothing to look up.
+        //
+        // The PRODUCT is looked up though, when STRIPE_PRODUCT_ID is set. The
+        // `product_data` fallback below works, but Stripe creates a new product
+        // for every session that uses it — a season's worth of purchases leaves
+        // the catalog full of identical rows and makes revenue-by-product
+        // useless. Pointing at one product instead is the difference between a
+        // report and a list.
         price_data: {
           currency: 'usd',
           unit_amount: amountCents,
-          product_data: { name: `Coglin — ${season.label} season support` },
+          ...(c.env.STRIPE_PRODUCT_ID
+            ? { product: c.env.STRIPE_PRODUCT_ID }
+            : { product_data: { name: `Coglin — ${season.label} season` } }),
         },
         quantity: 1,
       },

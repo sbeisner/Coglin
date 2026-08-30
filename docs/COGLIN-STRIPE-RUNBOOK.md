@@ -25,10 +25,20 @@ also the first time the webhook has ever fired.
 
 Same Stripe account as Inkubus. Toggle to **test mode** first (top right).
 
-- [ ] Product catalog → **+ Add product**. Name: `Coglin — Season`. Save.
-- [ ] **Do not add a price.** The buyer sets the amount and it is passed inline
-      per Checkout Session. There is no price ID to copy anywhere, and creating
-      one will only confuse the next person.
+- [ ] Product catalog → **+ Add product**. Name: `Coglin — Season`.
+- [ ] The form makes you pick **One-off** and enter an amount. It does not
+      matter what you put — put `$1`. **That price is never used.** The buyer
+      sets the amount and it is passed inline on each Checkout Session, so
+      nothing in the code ever reads a Price object. Save.
+- [ ] Copy the **product id** (`prod_…`) from the product's page. It goes in
+      `wrangler.jsonc` as `STRIPE_PRODUCT_ID`, alongside the other non-secret
+      config, the way Inkubus keeps its `PRICE_*` ids.
+
+      Skipping this works: the code falls back to describing the product inline.
+      But Stripe then creates a NEW product for every purchase, so after a
+      season the catalog is fifty identical rows and revenue-by-product tells
+      you nothing. Two minutes now, or a messy catalog later.
+
 - [ ] Developers → API keys → copy the **Secret key** (`sk_test_…`). This is the
       same key Inkubus uses; you do not need a second one.
 
@@ -57,6 +67,9 @@ cd ~/lilithforge/coglin && nvm use
 npx wrangler secret put STRIPE_SECRET_KEY --env production      # sk_test_…
 npx wrangler secret put STRIPE_WEBHOOK_SECRET --env production  # whsec_…
 ```
+
+`STRIPE_PRODUCT_ID` is **not** a secret and does not go here — it belongs in the
+`vars` block of `wrangler.jsonc` and needs a redeploy, unlike the two above.
 
 Each prompts for the value and pastes are not echoed. Wrangler redeploys the
 Worker itself, so there is nothing to run afterwards.

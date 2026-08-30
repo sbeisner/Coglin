@@ -38,6 +38,17 @@ export type Bindings = {
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   /**
+   * A Stripe product id (`prod_...`), NOT a secret — it lives in wrangler.jsonc
+   * next to the other non-secret config, the way Inkubus keeps its PRICE_* ids.
+   *
+   * Optional, and the fallback is the reason: without it every Checkout Session
+   * passes `product_data`, which makes Stripe mint a BRAND NEW product per
+   * purchase. Checkout works fine either way, but after a season the catalog is
+   * fifty identical rows and revenue-by-product reporting is meaningless. Set
+   * this and every sale rolls up under one product.
+   */
+  STRIPE_PRODUCT_ID?: string;
+  /**
    * Cloudflare Turnstile, guarding the one public endpoint that creates Stripe
    * sessions. Unset means the challenge is skipped, not that requests are denied
    * — the server-side amount clamp is the control that does not depend on

@@ -97,6 +97,29 @@ describe('POST /api/billing/checkout', () => {
     expect((await row('cs_ok'))?.status).toBe('pending');
   });
 
+  // Both product paths, because the fallback is what runs until a product id is
+  // configured and the fixed path is what runs afterwards. Getting either wrong
+  // is invisible until you look at the Stripe catalog weeks later.
+  it('uses a fixed product when one is configured, and an ad-hoc one otherwise', async () => {
+    const withoutId = stubStripe('cs_prod_a');
+    await checkout({ amount_cents: 14_400, seat_count: 12 });
+    const adhoc = withoutId.requests[0];
+    withoutId.restore();
+    expect(adhoc.get('line_items[0][price_data][product_data][name]')).toMatch(/^Coglin/);
+    expect(adhoc.get('line_items[0][price_data][product]')).toBeNull();
+
+    const withId = stubStripe('cs_prod_b');
+    restore = () => {
+      withId.restore();
+      delete (env as { STRIPE_PRODUCT_ID?: string }).STRIPE_PRODUCT_ID;
+    };
+    (env as { STRIPE_PRODUCT_ID?: string }).STRIPE_PRODUCT_ID = 'prod_test123';
+    await checkout({ amount_cents: 14_400, seat_count: 12 });
+    const fixed = withId.requests[0];
+    expect(fixed.get('line_items[0][price_data][product]')).toBe('prod_test123');
+    expect(fixed.get('line_items[0][price_data][product_data][name]')).toBeNull();
+  });
+
   it('clamps an amount below the floor', async () => {
     const stripe = stubStripe('cs_low');
     restore = stripe.restore;
