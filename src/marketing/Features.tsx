@@ -2,8 +2,8 @@
  * Everything Coglin does, in one list.
  *
  * It used to be two, split into "Working today" and "Planned this season" with
- * counts against each. That was over-cautious for an invite-only alpha where
- * every prospect is spoken to directly and nothing is gated behind payment: it
+ * counts against each. That was over-cautious for an early product where
+ * nothing is gated behind payment: it
  * made the product read as more unfinished than it is.
  *
  * The `status` field still exists and `capabilities.ts` is still the one place

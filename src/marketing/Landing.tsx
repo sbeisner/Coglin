@@ -71,19 +71,18 @@ export default function Landing() {
         <Screenshot name="boards" priority />
       </Wrap>
 
-      {/* The honest bit, placed early rather than buried. A private alpha that
-          reads as a finished product is the fastest way to lose a coach who
-          signs up and finds three empty screens. */}
+      {/* The honest bit, placed early rather than buried. Signup is open now, so
+          a coach can go from this page to an empty dashboard in a minute -- which
+          makes overselling here expensive rather than merely rude. */}
       <Wrap className="pb-10">
         <div className="border-border rounded-lg border border-dashed p-5">
           <h2 className="u-display text-base leading-tight">
-            It's a private alpha
+            It's early, and it's being built as the season runs
           </h2>
           <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-relaxed">
-            Coglin is being written during a live season by a coach, for the team he
-            coaches, and parts of it are still landing. You need an access code to
-            start a team, and while it is being built you decide what it is worth
-            paying.
+            Coglin is written by a coach for the team he coaches, and parts of it are
+            still landing. Create a team and use it today; while it is being built,
+            you decide what it is worth paying.
           </p>
         </div>
       </Wrap>

@@ -6,9 +6,6 @@
 #   openssl rand -hex 32
 SESSION_PEPPER=
 
-# Gates POST /api/auth/coach-signup. Unset means signup is closed, not open.
-ALPHA_SIGNUP_CODE=
-
 # Resend key for invite mail (COG-041). Safe to leave blank locally: invites are
 # still created and the dialog shows a copyable link, which is all you need to
 # walk the accept flow. Shared with Inkubus — see inkubus/backend/.env.local.

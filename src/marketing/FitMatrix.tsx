@@ -53,8 +53,8 @@ export function FitMatrix() {
       </div>
 
       <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
-        Coglin is in a private alpha for the 2026-27 season and parts of it are still
-        landing. Ask us where anything stands and you will get a straight answer.
+        Coglin is early and parts of it are still landing. Ask where anything
+        stands and you will get a straight answer.
       </p>
     </>
   );

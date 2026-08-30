@@ -12,12 +12,6 @@ export type Bindings = {
   ENVIRONMENT?: string;
   /** Extra entropy for session token hashing. Set as a secret per environment. */
   SESSION_PEPPER?: string;
-  /**
-   * Shared code required by POST /api/auth/coach-signup. Production is at a
-   * guessable URL and self-serve onboarding (COG-018) does not exist yet, so
-   * without this anyone could mint a team. Unset means signup is closed.
-   */
-  ALPHA_SIGNUP_CODE?: string;
   /** Absolute base URL used to build invite links in outgoing mail. */
   APP_BASE_URL?: string;
   /**

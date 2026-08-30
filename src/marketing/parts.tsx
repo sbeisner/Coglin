@@ -56,9 +56,9 @@ export function Section({
 /**
  * The closing call to action, repeated at the foot of every page.
  *
- * Honest about the gate: signup needs an access code during the alpha, and
- * finding that out only after filling in a form is the small insult that
- * `Signup.tsx` already goes out of its way to avoid.
+ * Signup is open, so this sends people to the form rather than to an inbox.
+ * It used to say "Ask for an access code", which is a strange thing to put
+ * under a pricing page.
  */
 export function CallToAction() {
   return (
@@ -68,15 +68,13 @@ export function CallToAction() {
           Run the whole season in one place.
         </h2>
         <p className="text-muted-foreground mt-3 max-w-xl text-sm leading-relaxed">
-          Coglin is in a private alpha for the 2026-27 season, so you need an access
-          code from us before you can create a team. While it is still being built,
-          you decide what it is worth paying.
+          Set up your team, invite your students, and start logging the season.
+          While Coglin is still being built you decide what it is worth paying,
+          and nothing is locked behind what you choose.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button asChild>
-            <a href="mailto:admin@lilithforge.com?subject=Coglin%20alpha%20access">
-              Ask for an access code
-            </a>
+            <Link to="/signup">Create your team</Link>
           </Button>
           <Button asChild variant="outline">
             <Link to="/pricing">See pricing</Link>

@@ -65,22 +65,26 @@ async function readJson(c: {
 }
 
 /**
- * Bootstrap a team and its first coach.
+ * Bootstrap a team and its first coach. Open to anyone.
  *
- * Gated on ALPHA_SIGNUP_CODE because production is reachable at a guessable
- * URL and self-serve onboarding (COG-018) does not exist yet — without the gate
- * anyone who found coglin.lilithforge.com could mint a team. The gate comes out
- * when real onboarding lands.
+ * This used to require ALPHA_SIGNUP_CODE, on the reasoning that production sits
+ * at a guessable URL and nobody should be able to mint a team by finding it.
+ * That became incoherent the moment the pricing page went live: the site asked
+ * for money and then refused the buyer an account, because the code was
+ * something you had to email and ask for. Charging for a door you have to be
+ * let through is not a funnel.
+ *
+ * WHAT OPENING IT COSTS, and it is worth knowing rather than discovering:
+ * `teams.team_number` is UNIQUE and nothing verifies that you belong to the
+ * team you claim. Numbers are public, so a stranger or a typo can take one and
+ * the real team then gets `already_exists` and cannot register. It is
+ * recoverable — delete the row — but somebody has to notice. A rate-limit rule
+ * on this path is the cheap mitigation; real verification is manual by design
+ * (plan §6) and does not exist yet.
  */
 auth.post('/coach-signup', sameOriginOnly, async (c) => {
   const body = await readJson(c);
   if (!body) return c.json({ error: 'invalid_body' }, 400);
-
-  const code = String(body.code ?? '');
-  const expected = c.env.ALPHA_SIGNUP_CODE;
-  // No code configured means signup is closed, not open. Failing shut matters
-  // more than a helpful error here.
-  if (!expected || code !== expected) return c.json({ error: 'forbidden' }, 403);
 
   const email = String(body.email ?? '')
     .trim()

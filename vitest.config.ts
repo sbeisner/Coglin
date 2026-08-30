@@ -26,7 +26,6 @@ export default defineConfig({
             // Auth secrets are per-environment secrets in real deployments;
             // tests need fixed values to sign up against.
             SESSION_PEPPER: 'test-pepper',
-            ALPHA_SIGNUP_CODE: 'test-signup-code',
             APP_BASE_URL: 'http://coglin.test',
             // Must be set, or sendInvite short-circuits before the fetch the
             // invite tests are asserting on. The value is never used: the

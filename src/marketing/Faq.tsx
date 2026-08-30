@@ -137,17 +137,16 @@ const QA: { q: string; a: ReactNode }[] = [
     ),
   },
   {
-    q: 'How do I get in?',
+    q: 'How do I get started?',
     a: (
       <>
-        You need an access code for the 2026-27 season. Email{' '}
-        <a
-          className="text-foreground underline underline-offset-4"
-          href="mailto:admin@lilithforge.com?subject=Coglin%20alpha%20access"
-        >
-          admin@lilithforge.com
-        </a>{' '}
-        with your team number.
+        Create a team at{' '}
+        <Link to="/signup" className="text-foreground underline underline-offset-4">
+          /signup
+        </Link>{' '}
+        with your team number and a password. That makes you the coach; you invite
+        your students and mentors from inside. There is no waiting list and nothing
+        to ask us for.
       </>
     ),
   },

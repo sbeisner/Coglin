@@ -55,7 +55,7 @@ export const PAGES: PageMeta[] = [
     path: '/pricing',
     title: 'Pricing — pay what you think is fair — Coglin',
     description:
-      'Coglin is in a private alpha and you set the price. We recommend $12 per seat for the season. One payment, not a subscription, and nothing is gated behind it.',
+      'Coglin is still being built and you set the price. We recommend $12 per seat for the season. One payment, not a subscription, and nothing is gated behind it.',
     changefreq: 'monthly',
     priority: '0.8',
   },

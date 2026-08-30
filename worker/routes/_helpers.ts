@@ -68,7 +68,6 @@ export async function signUpCoach(
   const response = await call('/api/auth/coach-signup', {
     method: 'POST',
     body: JSON.stringify({
-      code: env.ALPHA_SIGNUP_CODE,
       email: `coach${teamNumber}@example.com`,
       password: 'correct horse battery',
       display_name: `Coach ${teamNumber}`,
