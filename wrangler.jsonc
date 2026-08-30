@@ -49,7 +49,21 @@
         "run_worker_first": ["/api/*", "/media/*"]
       },
       "observability": { "enabled": true },
-      "vars": { "ENVIRONMENT": "staging" },
+      // STRIPE_PRODUCT_ID is the Stripe product every purchase rolls up under.
+      // Not a secret, so it lives here rather than in `wrangler secret put`.
+      //
+      // IT IS MODE-SPECIFIC. A prod_ id created in Stripe TEST mode does not
+      // exist in live mode: pair a test id with a live secret key and every
+      // checkout fails with "No such product". Swap this at go-live in the same
+      // pass as STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET, and remember this
+      // one needs a redeploy while the secrets do not.
+      //
+      // Unset is safe: the code falls back to naming the product inline, at the
+      // cost of Stripe minting a new product per sale.
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "STRIPE_PRODUCT_ID": "prod_VAWjS8LhOV8WNO"
+      },
       // Flat, single-level subdomain on purpose. Cloudflare Universal SSL
       // covers *.lilithforge.com but NOT two-level names like
       // staging.coglin.lilithforge.com — those need paid Advanced Certificate
@@ -83,7 +97,12 @@
         "run_worker_first": ["/api/*", "/media/*"]
       },
       "observability": { "enabled": true },
-      "vars": { "ENVIRONMENT": "production" },
+      // See the note in the staging block: this id is test-mode today and must
+      // be replaced with the live-mode product id at go-live.
+      "vars": {
+        "ENVIRONMENT": "production",
+        "STRIPE_PRODUCT_ID": "prod_VAWjS8LhOV8WNO"
+      },
       "routes": [
         { "pattern": "coglin.lilithforge.com", "custom_domain": true }
       ],
