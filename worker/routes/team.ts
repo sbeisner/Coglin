@@ -117,7 +117,7 @@ team.get('/members', requireMember, async (c) => {
   const { teamId, member: me } = authOf(c);
   const { results } = await c.env.DB.prepare(
     `SELECT id, team_id, user_id, role, sub_teams, display_name, handle, status,
-            photo_media_id, photo_consent_at, created_at
+            photo_media_id, photo_consent_at, is_purchase_approver, created_at
        FROM members
       WHERE team_id = ? AND status = 'active'
       ORDER BY created_at ASC`,
@@ -128,6 +128,7 @@ team.get('/members', requireMember, async (c) => {
       user_id: string;
       photo_media_id: string | null;
       photo_consent_at: number | null;
+      is_purchase_approver: number;
     }>();
 
   // Viewers are not offered the photo at all. The read route refuses it too —
@@ -142,9 +143,42 @@ team.get('/members', requireMember, async (c) => {
       // A boolean, not the timestamp: the roster needs to know whether a photo
       // may be attached, not to publish when a consent form was signed.
       photo_consent: m.photo_consent_at !== null,
+      is_purchase_approver: m.is_purchase_approver === 1,
     })),
   );
 });
+
+/**
+ * Flip the part-order approver flag (0009). Coach or mentor only — granting
+ * approval reach is a leadership act, even though holding it is not a role.
+ * The only writable field on a member so far; if this route grows more, keep
+ * each field's own validation the way PATCH /team does.
+ */
+team.patch(
+  '/members/:id',
+  sameOriginOnly,
+  requireMember,
+  requireRole('coach', 'mentor'),
+  async (c) => {
+    const body = await readJson(c);
+    if (!body) return c.json({ error: 'invalid_body' }, 400);
+    const { teamId } = authOf(c);
+
+    if (typeof body.is_purchase_approver !== 'boolean') {
+      return c.json({ error: 'nothing_to_update' }, 400);
+    }
+
+    const result = await c.env.DB.prepare(
+      `UPDATE members SET is_purchase_approver = ?
+        WHERE id = ? AND team_id = ? AND status = 'active'`,
+    )
+      .bind(body.is_purchase_approver ? 1 : 0, c.req.param('id'), teamId)
+      .run();
+    if (result.meta.changes === 0) return c.json({ error: 'not_found' }, 404);
+
+    return c.json({ ok: true, is_purchase_approver: body.is_purchase_approver });
+  },
+);
 
 // -------------------------------------------------------- roster photos
 

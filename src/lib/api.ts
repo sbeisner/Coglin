@@ -52,14 +52,19 @@ import type {
   OpenActionItem,
   MeetingKind,
   MeetingSeries,
+  FinanceSummary,
   MeetingStatus,
   MeetingSummary,
   Member,
   OutreachEvent,
+  PartOrder,
   PortfolioCandidate,
   Season,
   Task,
   Team,
+  Transaction,
+  TransactionCategory,
+  TransactionKind,
 } from '@/types';
 
 /** Small delay so loading states are real and get designed, not skipped. */
@@ -738,6 +743,145 @@ export function withdrawPhotoConsent(memberId: string): Promise<{ ok: true }> {
 
 export function deleteMemberPhoto(memberId: string): Promise<{ ok: true }> {
   return send(`/api/members/${memberId}/photo`, 'DELETE');
+}
+
+// -------------------------------------------------------------------- finance
+
+/**
+ * The season's ledger, receipts riding along. Readable by every role — a
+ * viewer is a parent or a sponsor, and where the money went is exactly what a
+ * sponsor is owed. Writes below are coach/mentor, enforced server-side.
+ */
+export function listTransactions(): Promise<Transaction[]> {
+  return get<{ transactions: Transaction[] }>('/api/finance/transactions').then(
+    (r) => r.transactions,
+  );
+}
+
+export function createTransaction(input: {
+  kind: TransactionKind;
+  category: TransactionCategory;
+  label: string;
+  note?: string | null;
+  amount_cents: number;
+  occurred_at: number;
+}): Promise<Transaction> {
+  return send<{ transaction: Transaction }>(
+    '/api/finance/transactions',
+    'POST',
+    input,
+  ).then((r) => r.transaction);
+}
+
+export function updateTransaction(
+  id: string,
+  patch: {
+    kind?: TransactionKind;
+    category?: TransactionCategory;
+    label?: string;
+    note?: string | null;
+    amount_cents?: number;
+    occurred_at?: number;
+  },
+): Promise<Transaction> {
+  return send<{ transaction: Transaction }>(
+    `/api/finance/transactions/${id}`,
+    'PATCH',
+    patch,
+  ).then((r) => r.transaction);
+}
+
+/** Removes the line and its receipts together — see the route's header. */
+export function deleteTransaction(id: string): Promise<{ ok: true }> {
+  return send(`/api/finance/transactions/${id}`, 'DELETE');
+}
+
+export function deleteReceipt(
+  transactionId: string,
+  mediaId: string,
+): Promise<{ ok: true }> {
+  return send(
+    `/api/finance/transactions/${transactionId}/receipts/${mediaId}`,
+    'DELETE',
+  );
+}
+
+export function financeSummary(): Promise<FinanceSummary> {
+  return get<FinanceSummary>('/api/finance/summary');
+}
+
+export function listPartOrders(): Promise<PartOrder[]> {
+  return get<{ orders: PartOrder[] }>('/api/finance/orders').then((r) => r.orders);
+}
+
+export function createPartOrder(input: {
+  item: string;
+  description?: string | null;
+  url?: string | null;
+  vendor?: string | null;
+  qty: number;
+  unit_price_cents: number;
+}): Promise<PartOrder> {
+  return send<{ order: PartOrder }>('/api/finance/orders', 'POST', input).then(
+    (r) => r.order,
+  );
+}
+
+/** Editable only while pending — after a decision the row is what was decided on. */
+export function updatePartOrder(
+  id: string,
+  patch: {
+    item?: string;
+    description?: string | null;
+    url?: string | null;
+    vendor?: string | null;
+    qty?: number;
+    unit_price_cents?: number;
+  },
+): Promise<PartOrder> {
+  return send<{ order: PartOrder }>(`/api/finance/orders/${id}`, 'PATCH', patch).then(
+    (r) => r.order,
+  );
+}
+
+export function decidePartOrder(
+  id: string,
+  decision: 'approved' | 'denied',
+  note?: string,
+): Promise<PartOrder> {
+  return send<{ order: PartOrder }>(`/api/finance/orders/${id}/decision`, 'POST', {
+    decision,
+    note,
+  }).then((r) => r.order);
+}
+
+/** Books the expense line in the same batch — see the route's header. */
+export function markOrderOrdered(id: string): Promise<PartOrder> {
+  return send<{ order: PartOrder }>(`/api/finance/orders/${id}/ordered`, 'POST').then(
+    (r) => r.order,
+  );
+}
+
+export function markOrderReceived(id: string): Promise<PartOrder> {
+  return send<{ order: PartOrder }>(`/api/finance/orders/${id}/received`, 'POST').then(
+    (r) => r.order,
+  );
+}
+
+export function cancelPartOrder(id: string): Promise<PartOrder> {
+  return send<{ order: PartOrder }>(`/api/finance/orders/${id}/cancel`, 'POST').then(
+    (r) => r.order,
+  );
+}
+
+/** Grant or revoke the part-order approver flag. Coach/mentor only. */
+export function setPurchaseApprover(
+  memberId: string,
+  isApprover: boolean,
+): Promise<{ ok: true; is_purchase_approver: boolean }> {
+  return send(`/api/members/${memberId}`, 'PATCH', {
+    is_purchase_approver: isApprover,
+  });
 }
 
 // ------------------------------------------------------------ season purchase

@@ -19,6 +19,7 @@ import Outreach from '@/routes/Outreach';
 import Meetings from '@/routes/Meetings';
 import Meeting from '@/routes/Meeting';
 import Portfolio from '@/routes/Portfolio';
+import Finance from '@/routes/Finance';
 import Notes from '@/routes/Notes';
 import Placeholder from '@/routes/Placeholder';
 import Debug from '@/routes/Debug';
@@ -91,6 +92,7 @@ const LEGACY_APP_PATHS = [
   '/outreach',
   '/portfolio',
   '/budget',
+  '/finance',
   '/calendar',
   '/debug',
   '/meetings',
@@ -175,7 +177,10 @@ export function App() {
                   path="calendar"
                   element={<Navigate to="/app/meetings?view=calendar" replace />}
                 />
-                <Route path="budget" element={<Placeholder />} />
+                <Route path="finance" element={<Finance />} />
+                {/* The section shipped as Finance; season-old bookmarks say
+                    budget. Chains with '/budget' in LEGACY_APP_PATHS below. */}
+                <Route path="budget" element={<Navigate to="/app/finance" replace />} />
                 <Route path="meetings" element={<Meetings />} />
                 {/* The app's first nested route. AppShell resolves its nav label by
                     prefix for this reason — an exact match leaves the mobile title

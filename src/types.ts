@@ -80,6 +80,12 @@ export interface Member {
    * hold a photo, not to publish when a form was signed.
    */
   photo_consent: boolean;
+  /**
+   * Whether this member may decide part orders. Coaches and mentors always
+   * can regardless of this flag — it exists to extend approval to a student
+   * treasurer. Mirrors is_purchase_approver in worker/lib/finance.ts.
+   */
+  is_purchase_approver: boolean;
   created_at: number;
 }
 
@@ -160,6 +166,132 @@ export interface Task {
   decision_log: string | null;
   created_at: number;
   updated_at: number;
+}
+
+// ------------------------------------------------------------------- finance
+
+/** income | expense, mirroring TRANSACTION_KINDS in worker/lib/finance.ts. */
+export type TransactionKind = 'income' | 'expense';
+
+/**
+ * Categories are per kind — the labels-first arrays below are what the
+ * category <select> renders, filtered by the kind toggle. The server validates
+ * the pair, so a mismatch is a 400 rather than a stored lie.
+ */
+export type ExpenseCategory =
+  | 'parts'
+  | 'tools'
+  | 'registration'
+  | 'travel'
+  | 'outreach'
+  | 'food'
+  | 'other';
+
+export type IncomeCategory =
+  | 'sponsorship'
+  | 'fundraising'
+  | 'grant'
+  | 'dues'
+  | 'other';
+
+export type TransactionCategory = ExpenseCategory | IncomeCategory;
+
+export const EXPENSE_CATEGORIES: { id: ExpenseCategory; label: string }[] = [
+  { id: 'parts', label: 'Parts' },
+  { id: 'tools', label: 'Tools' },
+  { id: 'registration', label: 'Registration' },
+  { id: 'travel', label: 'Travel' },
+  { id: 'outreach', label: 'Outreach' },
+  { id: 'food', label: 'Food' },
+  { id: 'other', label: 'Other' },
+];
+
+export const INCOME_CATEGORIES: { id: IncomeCategory; label: string }[] = [
+  { id: 'sponsorship', label: 'Sponsorship' },
+  { id: 'fundraising', label: 'Fundraising' },
+  { id: 'grant', label: 'Grant' },
+  { id: 'dues', label: 'Dues' },
+  { id: 'other', label: 'Other' },
+];
+
+/** A file evidencing a ledger line. `is_pdf` decides chip vs thumbnail. */
+export interface Receipt {
+  id: string;
+  bytes: number;
+  is_pdf: number;
+}
+
+/**
+ * One movement of money. `amount_cents` is always positive — `kind` carries
+ * the sign, so the client renders the minus rather than storing it.
+ * `order_item` is provenance: non-null means a part order booked this line.
+ */
+export interface Transaction {
+  id: string;
+  kind: TransactionKind;
+  category: TransactionCategory;
+  label: string;
+  note: string | null;
+  amount_cents: number;
+  occurred_at: number;
+  created_by: string | null;
+  created_at: number;
+  updated_at: number;
+  order_id: string | null;
+  order_item: string | null;
+  receipts: Receipt[];
+}
+
+/**
+ * The status ladder, mirroring ORDER_STATUSES in worker/lib/finance.ts:
+ * pending -> approved | denied, approved -> ordered -> received, and
+ * pending/approved -> canceled.
+ */
+export type OrderStatus =
+  | 'pending'
+  | 'approved'
+  | 'denied'
+  | 'ordered'
+  | 'received'
+  | 'canceled';
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  pending: 'Pending',
+  approved: 'Approved',
+  denied: 'Denied',
+  ordered: 'Ordered',
+  received: 'Received',
+  canceled: 'Canceled',
+};
+
+export interface PartOrder {
+  id: string;
+  item: string;
+  description: string | null;
+  url: string | null;
+  vendor: string | null;
+  qty: number;
+  unit_price_cents: number;
+  status: OrderStatus;
+  requested_by: string | null;
+  decided_by: string | null;
+  decided_at: number | null;
+  decision_note: string | null;
+  ordered_at: number | null;
+  received_at: number | null;
+  transaction_id: string | null;
+  created_at: number;
+  updated_at: number;
+  /** Joined display names, so the queue reads without a roster lookup. */
+  requested_by_name?: string | null;
+  decided_by_name?: string | null;
+}
+
+export interface FinanceSummary {
+  income_cents: number;
+  expense_cents: number;
+  pending_orders: number;
+  pending_estimate_cents: number;
 }
 
 export interface OutreachEvent {

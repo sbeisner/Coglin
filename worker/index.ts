@@ -5,6 +5,7 @@ import { bugs } from './routes/bugs';
 import { team } from './routes/team';
 import { boards } from './routes/boards';
 import { candidates } from './routes/candidates';
+import { finance } from './routes/finance';
 import { media, mediaFiles } from './routes/media';
 import { meetings } from './routes/meetings';
 import { meetingNotes } from './routes/notes';
@@ -83,6 +84,7 @@ app.route('/api/series', series);
 // dragged to another one. See the header of routes/docs.ts.
 app.route('/api/notes', docs);
 app.route('/api/portfolio', candidates);
+app.route('/api/finance', finance);
 app.route('/api/media', media);
 // Both declare full paths ('/boards', '/meetings/:id/attendance') rather than a
 // prefix, so they mount at /api alongside `team`.

@@ -41,5 +41,8 @@ export const NAV: NavItem[] = [
   { to: '/app/outreach', label: 'Outreach', icon: Megaphone, stub: true },
   { to: '/app/awards', label: 'Awards', icon: Trophy, stub: true },
   { to: '/app/portfolio', label: 'Portfolio', icon: FileText },
-  { to: '/app/budget', label: 'Budget', icon: Coins, stub: true },
+  // Renamed from Budget when the ledger and part orders shipped: the section
+  // grew past "budget lines" into the team's money generally, and sponsorship
+  // campaigns land here next. The /app/budget path still redirects in App.tsx.
+  { to: '/app/finance', label: 'Finance', icon: Coins },
 ];

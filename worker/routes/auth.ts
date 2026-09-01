@@ -230,6 +230,7 @@ auth.get('/me', async (c) => {
   const row = await c.env.DB.prepare(
     `SELECT m.id AS member_id, m.role AS role, m.display_name AS display_name,
             m.handle AS handle, m.sub_teams AS sub_teams,
+            m.is_purchase_approver AS is_purchase_approver,
             t.id AS team_id, t.team_number AS team_number, t.name AS team_name
        FROM members m
        JOIN teams t ON t.id = m.team_id
@@ -244,6 +245,7 @@ auth.get('/me', async (c) => {
       display_name: string;
       handle: string | null;
       sub_teams: string;
+      is_purchase_approver: number;
       team_id: string;
       team_number: number;
       team_name: string;
@@ -259,6 +261,9 @@ auth.get('/me', async (c) => {
       display_name: row.display_name,
       handle: row.handle,
       sub_teams: JSON.parse(row.sub_teams) as string[],
+      // The client's half of the approval gate: whether to OFFER the approve
+      // buttons. The routes decide whether they work.
+      is_purchase_approver: row.is_purchase_approver === 1,
     },
     team: {
       id: row.team_id,

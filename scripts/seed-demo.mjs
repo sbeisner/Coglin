@@ -21,8 +21,8 @@
  *
  * ONLY SCREENS THAT WORK
  *
- * Seeds boards, meetings, notes, roster and portfolio. It deliberately does NOT
- * seed outreach, award criteria or budget: those screens are stubs
+ * Seeds boards, meetings, notes, roster, portfolio and finance. It deliberately
+ * does NOT seed outreach or award criteria: those screens are stubs
  * (`src/lib/nav.ts` marks them `stub: true`) and a screenshot of one would be a
  * claim the rest of the site spends its time refusing to make.
  *
@@ -103,7 +103,8 @@ const out = (sql) => rows.push(sql);
 for (const t of [
   'meeting_attendance', 'meeting_agenda_items', 'meeting_action_items',
   'portfolio_candidates', 'note_docs', 'meetings', 'meeting_series',
-  'tasks', 'boards', 'portfolio_pages', 'media', 'members', 'seasons',
+  'tasks', 'boards', 'portfolio_pages', 'media', 'part_orders',
+  'transactions', 'members', 'seasons',
 ]) out(`DELETE FROM ${t} WHERE team_id = ${q(TEAM)};`);
 out(`DELETE FROM teams WHERE id = ${q(TEAM)};`);
 // LIKE, not equality: the roster's provisioned students are `${USER}-<n>`, and
@@ -289,6 +290,54 @@ const PAGES = [
 PAGES.forEach(([no, title, owner, state]) =>
   out(`INSERT INTO portfolio_pages (id, team_id, season_id, page_no, title, owner_member_id, state)
     VALUES (${q(`pp-${no}`)}, ${q(TEAM)}, ${q(SEASON)}, ${n(no)}, ${q(title)}, ${q(owner)}, ${q(state)});`));
+
+// ----------------------------------------------------------------- finance
+// A season a Sustain judge would call accounted for: income up front,
+// expenses through the build, and a part-order queue with a row in every
+// state the screen can render. Amounts are plausible FTC numbers, not
+// round ones — round numbers photograph as fake.
+const TRANSACTIONS = [
+  // [id, kind, category, label, note, cents, daysAgo, by]
+  ['tx-1', 'income', 'sponsorship', 'Harbor Machine Works sponsorship', 'Gold tier, second season', 75000, 95, 'm-men2'],
+  ['tx-2', 'income', 'grant', 'STEM booster grant', null, 50000, 88, 'm-coach'],
+  ['tx-3', 'expense', 'registration', 'FTC season registration', null, 29500, 82, 'm-coach'],
+  ['tx-4', 'income', 'fundraising', 'Car wash fundraiser', '11 cars, 4 students', 41500, 60, 'm-men2'],
+  ['tx-5', 'expense', 'parts', 'REV starter kit restock', 'Order 48117', 31240, 52, 'm-coach'],
+  ['tx-6', 'expense', 'tools', 'Metric hex driver set', null, 4599, 47, 'm-men2'],
+  ['tx-7', 'income', 'sponsorship', 'Riverside Dental sponsorship', 'Silver tier', 25000, 33, 'm-men2'],
+  ['tx-8', 'expense', 'outreach', 'Library demo table supplies', null, 6320, 21, 'm-coach'],
+  ['tx-9', 'expense', 'food', 'Scrimmage day pizza', 'Team + volunteers', 9850, 12, 'm-coach'],
+];
+for (const [id, kind, category, label, note, cents, daysAgo, by] of TRANSACTIONS) {
+  out(`INSERT INTO transactions (id, team_id, season_id, kind, category, label, note, amount_cents, occurred_at, created_by, created_at, updated_at)
+    VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(kind)}, ${q(category)}, ${q(label)}, ${q(note)}, ${n(cents)}, ${n(NOW - daysAgo * DAY)}, ${q(by)}, ${n(NOW - daysAgo * DAY)}, ${n(NOW - daysAgo * DAY)});`);
+}
+
+// The expense line the 'ordered' request below points at — the promote
+// pattern, visible in a screenshot as "from a part order".
+out(`INSERT INTO transactions (id, team_id, season_id, kind, category, label, note, amount_cents, occurred_at, created_by, created_at, updated_at)
+  VALUES ('tx-order', ${q(TEAM)}, ${q(SEASON)}, 'expense', 'parts', ${q('2× goBILDA 5203 servo')}, ${q('Ordered from goBILDA')}, 7998, ${n(NOW - 5 * DAY)}, 'm-stu4', ${n(NOW - 5 * DAY)}, ${n(NOW - 5 * DAY)});`);
+
+// Nia (business sub-team) holds the approver flag — the student-treasurer
+// case the flag exists for.
+out(`UPDATE members SET is_purchase_approver = 1 WHERE id = 'm-stu4' AND team_id = ${q(TEAM)};`);
+
+const ORDERS = [
+  // [id, item, desc, url, vendor, qty, cents, status, requester, extras]
+  ['po-1', 'Odometry pod bearings', 'Left pod is grinding after the scrimmage', 'https://www.revrobotics.com/', 'REV Robotics', 4, 649, 'pending', 'm-stu2', {}],
+  ['po-2', '18650 battery holder', null, null, 'Amazon', 1, 1299, 'pending', 'm-stu5', {}],
+  ['po-3', 'goBILDA 5203 servo', 'Intake wrist — current one stripped', 'https://www.gobilda.com/', 'goBILDA', 2, 3999, 'ordered', 'm-stu1',
+    { decided: 8, decidedBy: 'm-stu4', ordered: 5, orderedBy: 'm-stu4', transaction: 'tx-order' }],
+  ['po-4', 'Polycarb sheet 1/8"', 'Full side panels instead of patching', null, 'McMaster-Carr', 1, 5825, 'denied', 'm-stu5',
+    { decided: 15, decidedBy: 'm-coach', note: 'We have half a sheet left in the shop closet.' }],
+];
+for (const [id, item, desc, url, vendor, qty, cents, status, requester, x] of ORDERS) {
+  out(`INSERT INTO part_orders (id, team_id, season_id, item, description, url, vendor, qty, unit_price_cents, status, requested_by, decided_by, decided_at, decision_note, ordered_by, ordered_at, transaction_id, created_at, updated_at)
+    VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(item)}, ${q(desc)}, ${q(url)}, ${q(vendor)}, ${n(qty)}, ${n(cents)}, ${q(status)}, ${q(requester)},
+      ${q(x.decidedBy ?? null)}, ${x.decided ? n(NOW - x.decided * DAY) : 'NULL'}, ${q(x.note ?? null)},
+      ${q(x.orderedBy ?? null)}, ${x.ordered ? n(NOW - x.ordered * DAY) : 'NULL'}, ${q(x.transaction ?? null)},
+      ${n(NOW - 16 * DAY)}, ${n(NOW - 5 * DAY)});`);
+}
 
 const sql = [
   '-- GENERATED by scripts/seed-demo.mjs. Invented data for marketing',

@@ -22,7 +22,9 @@ import {
   dimensions,
   EXTENSIONS,
   sniff,
+  sniffReceipt,
   stripMetadata,
+  type ReceiptType,
 } from '../lib/images';
 import { optionalString, readJson } from '../lib/http';
 import {
@@ -48,8 +50,11 @@ const MAX_TEAM_BYTES = 2 * 1024 * 1024 * 1024;
  * of a student's face, which is treated differently everywhere it appears: kept
  * out of the library, refused as portfolio evidence, withheld from viewers, and
  * deleted when the member is no longer active. See 0004_roster_photos.sql.
+ * `receipt` is a file evidencing a ledger transaction (0009): it may be a PDF,
+ * it carries a transaction_id, and the library list leaves it out — a receipt
+ * belongs to its ledger line, not to the photo gallery.
  */
-export type MediaKind = 'photo' | 'roster_photo';
+export type MediaKind = 'photo' | 'roster_photo' | 'receipt';
 
 export interface IngestResult {
   id: string;
@@ -74,14 +79,25 @@ export async function ingestImage(
     seasonId: string;
     uploaderMemberId: string;
     kind: MediaKind;
+    /**
+     * Widens the accepted formats. Only the receipt route passes this (with
+     * RECEIPT_TYPES, which adds PDF) — every other caller keeps the image-only
+     * default, so a PDF pasted into notes is still refused.
+     */
+    allowed?: readonly ReceiptType[];
+    /** The ledger line a receipt evidences. Set only when kind is 'receipt'. */
+    transactionId?: string;
   },
   raw: Uint8Array,
 ): Promise<IngestResult | { error: string; status: 400 | 413 | 415 | 507 }> {
   if (raw.byteLength === 0) return { error: 'empty_body', status: 400 };
   if (raw.byteLength > MAX_BYTES) return { error: 'file_too_large', status: 413 };
 
-  const sniffed = sniff(raw);
-  if (!sniffed || !ALLOWED_TYPES.includes(sniffed)) {
+  const allowed: readonly ReceiptType[] = input.allowed ?? ALLOWED_TYPES;
+  const sniffed = allowed.includes('application/pdf')
+    ? sniffReceipt(raw)
+    : sniff(raw);
+  if (!sniffed || !allowed.includes(sniffed)) {
     return { error: 'unsupported_media_type', status: 415 };
   }
 
@@ -94,8 +110,14 @@ export async function ingestImage(
     return { error: 'quota_exceeded', status: 507 };
   }
 
-  const cleaned = stripMetadata(raw, sniffed);
-  const size = dimensions(cleaned, sniffed);
+  // PDF skips both: stripMetadata is image-container splicing that must not
+  // touch a PDF's object graph, and the deliberate decision NOT to strip PDF
+  // metadata at all is argued at sniffReceipt in lib/images.ts. Dimensions are
+  // an image concept — a PDF stores NULLs, which the column always allowed.
+  const cleaned =
+    sniffed === 'application/pdf' ? raw : stripMetadata(raw, sniffed);
+  const size =
+    sniffed === 'application/pdf' ? null : dimensions(cleaned, sniffed);
 
   const id = uuid();
   const key = `teams/${input.teamId}/${input.seasonId}/${id}.${EXTENSIONS[sniffed]}`;
@@ -106,8 +128,8 @@ export async function ingestImage(
     await env.DB.prepare(
       `INSERT INTO media
          (id, team_id, season_id, r2_key, kind, bytes, width, height, caption,
-          tags, uploaded_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '[]', ?, ?)`,
+          tags, uploaded_by, transaction_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '[]', ?, ?, ?)`,
     )
       .bind(
         id,
@@ -119,6 +141,7 @@ export async function ingestImage(
         size?.width ?? null,
         size?.height ?? null,
         input.uploaderMemberId,
+        input.transactionId ?? null,
         nowSeconds(),
       )
       .run();
@@ -249,16 +272,18 @@ media.post('/', sameOriginOnly, requireMember, denyRole('viewer'), async (c) => 
 /**
  * The team's library.
  *
- * Roster photos are excluded. They are pictures of students' faces attached to
- * their roster rows, not team media — surfacing them in a browsable gallery
- * would turn a "put faces to names" convenience into a directory of children.
+ * Only `kind = 'photo'` — a positive filter now that there are three kinds.
+ * Roster photos are pictures of students' faces attached to their roster rows,
+ * not team media — surfacing them in a browsable gallery would turn a "put
+ * faces to names" convenience into a directory of children. Receipts belong to
+ * their ledger lines and are listed there, not here.
  */
 media.get('/', requireMember, async (c) => {
   const { teamId } = authOf(c);
   const { results } = await c.env.DB.prepare(
     `SELECT id, season_id, kind, bytes, width, height, caption, uploaded_by, created_at
        FROM media
-      WHERE team_id = ? AND kind <> 'roster_photo'
+      WHERE team_id = ? AND kind = 'photo'
       ORDER BY created_at DESC LIMIT 200`,
   )
     .bind(teamId)

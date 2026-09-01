@@ -10,8 +10,6 @@ import { PageHeader } from '@/components/PageHeader';
 const NOTES: Record<string, string> = {
   '/app/awards':
     'Per-award criteria checklists from the Competition Manual §6, each item linked to evidence, with the Inspire triad view.',
-  '/app/budget':
-    'Income and expense lines, sponsor tiers and thank-you status — the progress tracking Sustain requires.',
 };
 
 export default function Placeholder() {

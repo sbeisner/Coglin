@@ -187,16 +187,31 @@ export const CAPABILITIES: Capability[] = [
       "Event, date, hours, people reached, photos, and what the team took away from it. The totals roll up the way a portfolio and an interview actually want them. Reach also asks you to show you recruited other teams and mentors, so that gets logged too.",
     awards: ['reach', 'connect', 'inspire'],
   },
+  // Two entries where 'budget' used to be one, because the ledger shipped and
+  // the sponsor tools did not. One capability covering both would let the
+  // working half vouch for the missing half — exactly the mis-sell this file's
+  // header is about.
   {
-    key: 'budget',
-    job: 'Budget and sponsors',
-    status: 'soon',
-    navTo: '/app/budget',
+    key: 'finance',
+    job: 'The team money, accounted for',
+    status: 'now',
+    navTo: '/app/finance',
     pm: 'no',
     docs: 'manual',
     inMatrix: true,
     detail:
-      "Income and expense lines, plus sponsors with tiers and whether anyone has thanked them yet. Sustain asks for documentation showing progress against your plan, not only the plan. This is meant to be that documentation.",
+      'Income and expense lines with receipts attached — photos or PDFs — plus part order requests any student can file and an approver signs off. Sustain asks for documentation showing progress against your plan, not only the plan. This is that documentation.',
+    awards: ['sustain'],
+  },
+  {
+    key: 'sponsors',
+    job: 'Sponsors and campaigns',
+    status: 'soon',
+    navTo: '/app/finance',
+    pm: 'no',
+    docs: 'manual',
+    detail:
+      'Sponsor tiers, pitch copy, a prospect pipeline and whether anyone has thanked them yet. Lands in the Finance section next to the ledger their cheques already appear in.',
     awards: ['sustain'],
   },
   {
