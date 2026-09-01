@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { auth } from './routes/auth';
 import { invites } from './routes/invites';
+import { bugs } from './routes/bugs';
 import { team } from './routes/team';
 import { boards } from './routes/boards';
 import { candidates } from './routes/candidates';
@@ -71,6 +72,7 @@ app.get('/api/health', async (c) => {
 
 app.route('/api/auth', auth);
 app.route('/api/invites', invites);
+app.route('/api/bug-reports', bugs);
 // `meetingNotes` is mounted first because it claims the deeper paths under a
 // meeting (/:id/agenda, /:id/start); `meetings` owns /:id itself.
 app.route('/api/meetings', meetingNotes);

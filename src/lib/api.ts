@@ -809,6 +809,48 @@ export function mutateBoard(
   });
 }
 
+// ---------------------------------------------------------------- bug reports
+
+export interface BugReportResult {
+  ok: true;
+  /** Quotable in the alpha channel — the dialog shows the first eight. */
+  id: string;
+  /**
+   * False when the mail to us did not go out. The row exists either way, and
+   * the dialog says which happened rather than claiming success.
+   */
+  sent: boolean;
+}
+
+/**
+ * File a bug from inside the app.
+ *
+ * The diagnostics come from lib/diagnostics.ts and are SHOWN TO THE REPORTER
+ * before this is called. Nothing is collected silently, and nothing here is a
+ * screenshot or a copy of the page — see migrations/0008_bug_reports.sql for
+ * what is deliberately absent and why.
+ *
+ * Everything past `body` is advisory: the server whitelists what it stores and
+ * stamps the environment itself, so a client that sends nothing still files a
+ * usable report.
+ */
+export function submitBugReport(input: {
+  body: string;
+  kind?: 'bug' | 'confusing' | 'idea';
+  route?: string;
+  app_build?: string;
+  user_agent?: string;
+  viewport_w?: number;
+  viewport_h?: number;
+  dpr?: number;
+  timezone?: string;
+  language?: string;
+  theme?: string;
+  online?: boolean;
+}): Promise<BugReportResult> {
+  return send<BugReportResult>('/api/bug-reports', 'POST', input);
+}
+
 /**
  * Now, in epoch seconds.
  *

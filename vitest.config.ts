@@ -31,6 +31,10 @@ export default defineConfig({
             // invite tests are asserting on. The value is never used: the
             // tests intercept every api.resend.com request.
             RESEND_API_KEY: 'test-resend-key',
+            // Bug reports (COG-0xx). Set, unlike SIGNUP_ALERT_TO, because the
+            // bug tests assert on the mail that goes out — and stubResend()
+            // intercepts every api.resend.com request, so nothing leaves.
+            BUG_ALERT_TO: 'bugs@coglin.test',
             // Billing (COG-047). Both must be set or the routes short-circuit
             // to 503 before reaching the logic under test. Every api.stripe.com
             // request is intercepted by stubStripe(); the webhook secret is a

@@ -110,6 +110,10 @@ Users are 12–18. Students are **coach-provisioned**: no self-signup, no email,
 login is `team_number + handle + password`. Student PII is limited to a display
 name and a handle. See the plan's §6 before touching auth.
 
+Bug reports are the one place a student's free writing leaves the app by mail.
+The header of `migrations/0008_bug_reports.sql` records what the reporter is
+shown before they send and what is deliberately never captured.
+
 ## Information architecture
 
 One Worker serves three things at `coglin.lilithforge.com`, split by path:
@@ -211,3 +215,47 @@ down with `challenge_failed`. There is a test for exactly this.
 Setup, secrets and the go-live checklist: `docs/COGLIN-STRIPE-RUNBOOK.md`. With
 `STRIPE_SECRET_KEY` unset the endpoint answers 503 and the rest of the app is
 unaffected, which is the correct state for most local work.
+
+## Bug reports
+
+A "Report a bug" button in the sidebar footer (`SidebarFoot` in
+`src/components/AppShell.tsx`, which renders on both the desktop sidebar and the
+mobile sheet). It exists because the alpha's testers are volunteer coaches: a
+report that costs a context switch does not get filed.
+
+**The row commits before the mail goes out**, the same order invites use. A mail
+outage is a degraded result — `sent: false`, and the dialog says so — never a
+lost report.
+
+**Anyone on a team may file one.** No role gate, deliberately: a viewer is a
+parent looking at a screen that just broke. Two tests in
+`worker/routes/bugs.test.ts` exist only to fail if a `requireRole` appears.
+
+**`BUG_ALERT_TO` is where they land**, comma-separated, set per environment in
+`wrangler.jsonc` next to `SIGNUP_ALERT_TO`. Unset means no mail, not no report —
+which is the correct local and test behaviour.
+
+Reports the mail never carried, after a Resend key rotation (the key is shared
+with Inkubus, so rotating it there stops Coglin mail here):
+
+```
+wrangler d1 execute coglin-prod --remote --env production --command \
+  "SELECT id, created_at, role, substr(body,1,60) FROM bug_reports WHERE emailed = 0"
+```
+
+Triage. There is no UI for `status` and is not going to be one during the alpha:
+
+```
+wrangler d1 execute coglin-prod --remote --env production --command \
+  "SELECT id, created_at, kind, role, route, app_build, substr(body,1,80) \
+     FROM bug_reports WHERE status = 'new' ORDER BY created_at"
+```
+
+`app_build` is the short commit sha the bundle was built from, `-dirty` when the
+tree had uncommitted changes. It is stamped by a `define` that must stay in
+**both** `vite.config.ts` and `vite.ssr.config.ts` — the prerender step compiles
+the same component graph, and defining it in only one fails the build a step
+later than the file you edited.
+
+Report bodies are free text written by minors and are included in the nightly R2
+dump, because `worker/backup.ts` enumerates `sqlite_master`.

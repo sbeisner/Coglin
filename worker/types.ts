@@ -30,6 +30,22 @@ export type Bindings = {
    */
   SIGNUP_ALERT_TO?: string;
   /**
+   * Where in-app bug reports go (COG-0xx). Same shape and same reasoning as
+   * SIGNUP_ALERT_TO above: our own address, comma-separated for more than one,
+   * never anything derived from a request.
+   *
+   * Separate from SIGNUP_ALERT_TO rather than a shared OPERATOR_ALERT_TO
+   * because the two have different volumes and different urgencies — a signup
+   * is a handful a season and worth a notification, a bug report during the
+   * alpha is a stream and belongs in whatever gets read in batches. Splitting
+   * them now is one line. Splitting them once a filter exists is a migration of
+   * somebody's mail rules.
+   *
+   * Unset means the report is still written to bug_reports and the reporter is
+   * told so honestly — it means no mail, not no report.
+   */
+  BUG_ALERT_TO?: string;
+  /**
    * Stripe, for the alpha pricing page (COG-047). Optional in the same sense as
    * RESEND_API_KEY above: unset means the /pricing page's pay button answers 503
    * and everything else in the app is unaffected. Access is not gated on payment
