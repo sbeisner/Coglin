@@ -21,6 +21,15 @@ export type Bindings = {
    */
   RESEND_API_KEY?: string;
   /**
+   * Where new-team signup alerts go (COG-041). Comma-separated for more than
+   * one. Our own address, never anything derived from a request.
+   *
+   * Optional, and unset is the right default off-production: it means signup
+   * sends no alert at all, so local dev and the test suite cannot mail a real
+   * person. Alerts also require RESEND_API_KEY — same transport as invites.
+   */
+  SIGNUP_ALERT_TO?: string;
+  /**
    * Stripe, for the alpha pricing page (COG-047). Optional in the same sense as
    * RESEND_API_KEY above: unset means the /pricing page's pay button answers 503
    * and everything else in the app is unaffected. Access is not gated on payment

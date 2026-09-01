@@ -143,20 +143,41 @@ export async function whoami(
  * invite therefore has to hold this seam too, or running the tests emails real
  * people. Call from `beforeAll`.
  *
- * Returns a restore function, though suites generally do not need it: each test
- * file gets its own isolate.
+ * Returns `restore` — which suites generally do not need, since each test file
+ * gets its own isolate — and `requests`, the parsed JSON bodies seen. Same
+ * shape as `stubStripe` below, for the same reason: a mail is only really
+ * asserted by checking what crossed the wire, not what the route echoed back.
+ *
+ * `status` answers with something other than 200, for the tests that care what
+ * happens when Resend rejects a send.
  */
-export function stubResend(): () => void {
+export function stubResend(options: { status?: number } = {}): {
+  restore: () => void;
+  requests: Record<string, unknown>[];
+} {
   const realFetch = globalThis.fetch;
+  const requests: Record<string, unknown>[] = [];
+  const status = options.status ?? 200;
+
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (!url.startsWith('https://api.resend.com')) {
       return realFetch(input as RequestInfo, init);
     }
-    return new Response(JSON.stringify({ id: 'test-message-id' }), { status: 200 });
+    try {
+      requests.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+    } catch {
+      // A body we cannot parse is still a send worth counting.
+      requests.push({});
+    }
+    return new Response(JSON.stringify({ id: 'test-message-id' }), { status });
   }) as typeof fetch;
-  return () => {
-    globalThis.fetch = realFetch;
+
+  return {
+    restore: () => {
+      globalThis.fetch = realFetch;
+    },
+    requests,
   };
 }
 

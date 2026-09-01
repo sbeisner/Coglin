@@ -126,6 +126,66 @@ describe('coach signup', () => {
   });
 });
 
+/**
+ * Signup alerts. `SIGNUP_ALERT_TO` is unset everywhere else — including
+ * vitest.config.ts — so every other suite signs coaches up without generating
+ * mail. These tests opt in by setting it for their own duration, which also
+ * keeps the invite assertions above free of stray entries in `resendCalls`.
+ */
+describe('new-team signup alert', () => {
+  const withAlertTo = async (address: string, fn: () => Promise<void>) => {
+    const previous = env.SIGNUP_ALERT_TO;
+    env.SIGNUP_ALERT_TO = address;
+    try {
+      await fn();
+    } finally {
+      env.SIGNUP_ALERT_TO = previous;
+    }
+  };
+
+  it('mails the operator with the team, coach and season', async () => {
+    await withAlertTo('admin@lilithforge.com', async () => {
+      await signUpCoach(8801, { region: 'Maryland', display_name: 'Dana Vance' });
+    });
+
+    expect(resendCalls).toHaveLength(1);
+    const { body } = resendCalls[0];
+    expect(body.to).toEqual(['admin@lilithforge.com']);
+    expect(String(body.subject)).toContain('8801 Team 8801');
+    const text = String(body.text);
+    expect(text).toContain('Dana Vance');
+    expect(text).toContain('coach8801@example.com');
+    expect(text).toContain('Maryland');
+  });
+
+  it('sends to every address in a comma-separated list', async () => {
+    await withAlertTo('admin@lilithforge.com, steven@example.com', async () => {
+      await signUpCoach(8802);
+    });
+
+    expect(resendCalls).toHaveLength(1);
+    expect(resendCalls[0].body.to).toEqual([
+      'admin@lilithforge.com',
+      'steven@example.com',
+    ]);
+  });
+
+  it('sends nothing when no alert address is configured', async () => {
+    await signUpCoach(8803);
+    expect(resendCalls).toHaveLength(0);
+  });
+
+  it('still creates the team when the alert fails to send', async () => {
+    resendMode = 'network-error';
+    await withAlertTo('admin@lilithforge.com', async () => {
+      const cookie = await signUpCoach(8804);
+      const me = await call('/api/auth/me', { cookie });
+      expect(me.status).toBe(200);
+      expect(await me.json()).toMatchObject({ authenticated: true });
+    });
+  });
+});
+
 describe('login', () => {
   it('accepts email + password for an adult', async () => {
     await signUpCoach(1001);

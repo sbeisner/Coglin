@@ -18,6 +18,7 @@ import {
   uuid,
   verifyPassword,
 } from '../lib/crypto';
+import { sendSignupAlert } from '../lib/email';
 import {
   clearSessionCookie,
   createSession,
@@ -138,6 +139,24 @@ auth.post('/coach-signup', sameOriginOnly, async (c) => {
     if (message.includes('UNIQUE')) return c.json({ error: 'already_exists' }, 409);
     throw err;
   }
+
+  // Tell us a team arrived. `waitUntil` rather than `await` is the whole point:
+  // the coach's account is already committed, so the alert must not add a
+  // round-trip to Resend onto their signup, and a Resend outage must not turn a
+  // successful signup into an error page. It is a notification about work that
+  // is already done, not a step in it.
+  c.executionCtx.waitUntil(
+    sendSignupAlert(c.env, {
+      teamNumber,
+      teamName,
+      region,
+      coachName: displayName,
+      coachEmail: email,
+      seasonLabel: season.label,
+      environment: c.env.ENVIRONMENT ?? 'unknown',
+      at: now,
+    }),
+  );
 
   const cookie = await createSession(c.env, userId);
   return c.json(

@@ -60,9 +60,16 @@
       //
       // Unset is safe: the code falls back to naming the product inline, at the
       // cost of Stripe minting a new product per sale.
+      //
+      // SIGNUP_ALERT_TO is where "a new team signed up" mail lands. Not a
+      // secret, and deliberately config rather than a constant so the address
+      // can change without a code edit (it still needs a redeploy). Comma-
+      // separate for more than one recipient. Leaving it unset disables the
+      // alert entirely, which is what local dev and the test suite rely on.
       "vars": {
         "ENVIRONMENT": "staging",
-        "STRIPE_PRODUCT_ID": "prod_VAWjS8LhOV8WNO"
+        "STRIPE_PRODUCT_ID": "prod_VAWjS8LhOV8WNO",
+        "SIGNUP_ALERT_TO": "admin@lilithforge.com"
       },
       // Flat, single-level subdomain on purpose. Cloudflare Universal SSL
       // covers *.lilithforge.com but NOT two-level names like
@@ -101,7 +108,8 @@
       // be replaced with the live-mode product id at go-live.
       "vars": {
         "ENVIRONMENT": "production",
-        "STRIPE_PRODUCT_ID": "prod_VAWjS8LhOV8WNO"
+        "STRIPE_PRODUCT_ID": "prod_VAWjS8LhOV8WNO",
+        "SIGNUP_ALERT_TO": "admin@lilithforge.com"
       },
       "routes": [
         { "pattern": "coglin.lilithforge.com", "custom_domain": true }

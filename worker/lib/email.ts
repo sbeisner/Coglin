@@ -154,3 +154,122 @@ export async function sendInvite(
     return false;
   }
 }
+
+/**
+ * Operator alert: a new team just signed up (COG-041, alert slice).
+ *
+ * This one is the mirror image of the invite above. The invite goes OUT to a
+ * person we must not remember; this goes IN to us, and its recipient is
+ * `SIGNUP_ALERT_TO` — our own address, fixed in config, never derived from
+ * request input. That distinction is what makes it safe to name the new coach's
+ * email in the body: they are an adult account holder (`users.is_minor = 0`),
+ * the address is going to the mailbox that already owns the relationship, and
+ * nothing here writes it to a log. The COPPA rule in the file header is about
+ * student recipients and still holds everywhere it applies.
+ *
+ * Unset `SIGNUP_ALERT_TO` means no alert, which is the correct behaviour in
+ * local dev and in tests: signing up is not supposed to mail a real person
+ * every time someone runs the suite.
+ */
+export interface SignupAlertMail {
+  teamNumber: number;
+  teamName: string;
+  region: string | null;
+  coachName: string;
+  /** The new coach's address. Body content, not the recipient — see above. */
+  coachEmail: string;
+  seasonLabel: string;
+  environment: string;
+  /** Unix seconds, rendered as UTC. */
+  at: number;
+}
+
+function renderSignupAlert(mail: SignupAlertMail): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const team = `${mail.teamNumber} ${mail.teamName}`;
+  // The environment is in the subject so a staging smoke test is never mistaken
+  // for a real sale sitting in the inbox.
+  const tag = mail.environment === 'production' ? '' : `[${mail.environment}] `;
+  const subject = `${tag}New Coglin team: ${team}`;
+
+  const rows: [string, string][] = [
+    ['Team', team],
+    ['Region', mail.region || '—'],
+    ['Coach', mail.coachName],
+    ['Email', mail.coachEmail],
+    ['Season', mail.seasonLabel],
+    ['Signed up', `${new Date(mail.at * 1000).toISOString().replace('T', ' ').slice(0, 16)} UTC`],
+    ['Environment', mail.environment],
+  ];
+
+  const text = [`${team} just signed up for Coglin.`, '']
+    .concat(rows.map(([label, value]) => `${label}: ${value}`))
+    .join('\n');
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#f4f7f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#16201a;">
+    <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">
+      <p style="margin:0 0 20px;font-size:18px;line-height:1.5;">
+        <strong>${escapeHtml(team)}</strong> just signed up for Coglin.
+      </p>
+      <table style="border-collapse:collapse;font-size:15px;line-height:1.6;">
+        ${rows
+          .map(
+            ([label, value]) =>
+              `<tr><td style="padding:2px 16px 2px 0;color:#6f7a72;">${escapeHtml(label)}</td><td style="padding:2px 0;">${escapeHtml(value)}</td></tr>`,
+          )
+          .join('\n        ')}
+      </table>
+    </div>
+  </body>
+</html>`;
+
+  return { subject, html, text };
+}
+
+/**
+ * Fire-and-forget from the signup handler's `waitUntil`. Returns a boolean for
+ * the same reason `sendInvite` does — the team already exists by the time this
+ * runs, so a failed alert is something we notice by its absence, never
+ * something that costs a coach their account.
+ */
+export async function sendSignupAlert(
+  env: Bindings,
+  mail: SignupAlertMail,
+): Promise<boolean> {
+  if (!env.RESEND_API_KEY || !env.SIGNUP_ALERT_TO) return false;
+
+  // Comma-separated so a second pair of eyes can be added without a code change.
+  const to = env.SIGNUP_ALERT_TO.split(',')
+    .map((address) => address.trim())
+    .filter(Boolean);
+  if (to.length === 0) return false;
+
+  const { subject, html, text } = renderSignupAlert(mail);
+
+  try {
+    const response = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from: FROM, to, subject, html, text }),
+    });
+    if (!response.ok) {
+      console.error(`signup alert rejected by Resend: HTTP ${response.status}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error(
+      'signup alert send failed:',
+      err instanceof Error ? err.name : 'unknown',
+    );
+    return false;
+  }
+}
