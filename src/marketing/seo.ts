@@ -75,6 +75,22 @@ export const PAGES: PageMeta[] = [
     changefreq: 'monthly',
     priority: '0.6',
   },
+  {
+    path: '/privacy',
+    title: 'Privacy — what Coglin knows about your team — Coglin',
+    description:
+      'What Coglin stores about coaches and students, who processes it, and how to get it out or deleted. No student emails, no analytics, no ads.',
+    changefreq: 'monthly',
+    priority: '0.3',
+  },
+  {
+    path: '/terms',
+    title: 'Terms of service — Coglin',
+    description:
+      'The agreement in plain language: who can use Coglin, what a purchase buys, whose content it is, and what the alpha does and does not promise.',
+    changefreq: 'monthly',
+    priority: '0.3',
+  },
 ];
 
 /** Shared across every page; only title and description vary per route. */

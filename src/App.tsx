@@ -9,6 +9,8 @@ import Awards from '@/marketing/Awards';
 import Faq from '@/marketing/Faq';
 import About from '@/marketing/About';
 import Pricing from '@/marketing/Pricing';
+import Privacy from '@/marketing/Privacy';
+import Terms from '@/marketing/Terms';
 import NotFound from '@/marketing/NotFound';
 import Dashboard from '@/routes/Dashboard';
 import Boards from '@/routes/Boards';
@@ -122,6 +124,8 @@ export function App() {
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/faq" element={<Faq />} />
                 <Route path="/about" element={<About />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/terms" element={<Terms />} />
                 {/* Anything unrecognised is a marketing 404, because by this point
                     the app routes and the legacy redirects have both had their
                     chance. */}

@@ -31,6 +31,13 @@ const LINKS = [
   { to: '/about', label: 'About' },
 ];
 
+/** Footer-only. Legal pages don't belong in the top nav, but a parent or a
+    school looking for them expects the footer, so they live on every page. */
+const LEGAL_LINKS = [
+  { to: '/privacy', label: 'Privacy' },
+  { to: '/terms', label: 'Terms' },
+];
+
 /**
  * Keep <title> and the canonical link in step with client-side navigation.
  *
@@ -163,7 +170,7 @@ export function MarketingShell() {
       <footer className="border-border mt-16 border-t">
         <div className="text-muted-foreground mx-auto w-full max-w-5xl space-y-4 px-4 py-10 text-xs leading-relaxed">
           <div className="flex flex-wrap gap-x-5 gap-y-2">
-            {LINKS.map((l) => (
+            {[...LINKS, ...LEGAL_LINKS].map((l) => (
               <Link key={l.to} to={l.to} className="hover:text-foreground">
                 {l.label}
               </Link>
