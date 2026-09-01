@@ -18,12 +18,19 @@ export function SaveIndicator({
   onRetry,
   onKeepMine,
   onLoadTheirs,
+  subject = 'page',
 }: {
   status: SyncStatus;
   savedAt: number | null;
   onRetry: () => void;
   onKeepMine: () => void;
   onLoadTheirs: () => void;
+  /**
+   * What the person is editing, for the conflict sentence. A parameter because
+   * this indicator now serves note pages and campaign pitches, and "somebody
+   * edited this page" is wrong about the second one.
+   */
+  subject?: string;
 }) {
   if (status === 'conflict') {
     return (
@@ -31,7 +38,7 @@ export function SaveIndicator({
         role="alert"
         className="border-destructive/40 bg-destructive/10 text-destructive flex flex-wrap items-center gap-3 rounded-md border px-3 py-2 text-sm"
       >
-        <span>Somebody else edited this page while you were typing.</span>
+        <span>Somebody else edited this {subject} while you were typing.</span>
         <button
           type="button"
           onClick={onKeepMine}

@@ -59,7 +59,12 @@ import type {
   OutreachEvent,
   PartOrder,
   PortfolioCandidate,
+  ProspectStage,
   Season,
+  Sponsor,
+  SponsorProspect,
+  SponsorshipCampaign,
+  SponsorshipTier,
   Task,
   Team,
   Transaction,
@@ -882,6 +887,225 @@ export function setPurchaseApprover(
   return send(`/api/members/${memberId}`, 'PATCH', {
     is_purchase_approver: isApprover,
   });
+}
+
+// --------------------------------------------------------------- sponsorship
+
+/**
+ * Campaigns with their tiers and money rollups. Readable by every role — the
+ * sponsorship story is the part of the season a sponsor is most obviously owed.
+ */
+export function listCampaigns(): Promise<SponsorshipCampaign[]> {
+  return get<{ campaigns: SponsorshipCampaign[] }>('/api/finance/campaigns').then(
+    (r) => r.campaigns,
+  );
+}
+
+/** The single read, which is the only one carrying the pitch body. */
+export function getCampaign(id: string): Promise<SponsorshipCampaign> {
+  return get<{ campaign: SponsorshipCampaign }>(`/api/finance/campaigns/${id}`).then(
+    (r) => r.campaign,
+  );
+}
+
+export function createCampaign(input: {
+  name: string;
+  goal_cents: number;
+}): Promise<SponsorshipCampaign> {
+  return send<{ campaign: SponsorshipCampaign }>(
+    '/api/finance/campaigns',
+    'POST',
+    input,
+  ).then((r) => r.campaign);
+}
+
+export function updateCampaign(
+  id: string,
+  patch: { name?: string; goal_cents?: number },
+): Promise<SponsorshipCampaign> {
+  return send<{ campaign: SponsorshipCampaign }>(
+    `/api/finance/campaigns/${id}`,
+    'PATCH',
+    patch,
+  ).then((r) => r.campaign);
+}
+
+/**
+ * Save the pitch on a compare-and-swap.
+ *
+ * Returns just the new rev, which is the shape `pitchSyncAdapter` in
+ * useDocSync.ts needs. A stale write throws `Error('stale_content')` — the code
+ * the sync queue checks for to leave its retry loop.
+ */
+export function putCampaignPitch(
+  id: string,
+  content: string,
+  baseRev?: number,
+): Promise<{ rev: number; unchanged?: boolean }> {
+  return send<{ campaign: SponsorshipCampaign; unchanged?: boolean }>(
+    `/api/finance/campaigns/${id}/pitch`,
+    'PUT',
+    { content, base_rev: baseRev },
+  ).then((r) => ({ rev: r.campaign.rev, unchanged: r.unchanged }));
+}
+
+/** Refused while the campaign still holds prospects or sponsors. */
+export function deleteCampaign(id: string): Promise<{ ok: true }> {
+  return send(`/api/finance/campaigns/${id}`, 'DELETE');
+}
+
+export function createTier(
+  campaignId: string,
+  input: { name: string; amount_cents: number; benefits?: string | null },
+): Promise<SponsorshipTier> {
+  return send<{ tier: SponsorshipTier }>(
+    `/api/finance/campaigns/${campaignId}/tiers`,
+    'POST',
+    input,
+  ).then((r) => r.tier);
+}
+
+export function updateTier(
+  campaignId: string,
+  tierId: string,
+  patch: { name?: string; amount_cents?: number; benefits?: string | null },
+): Promise<SponsorshipTier> {
+  return send<{ tier: SponsorshipTier }>(
+    `/api/finance/campaigns/${campaignId}/tiers/${tierId}`,
+    'PATCH',
+    patch,
+  ).then((r) => r.tier);
+}
+
+/** Takes the full ordered id list — a partial one is refused as `stale_order`. */
+export function reorderTiers(
+  campaignId: string,
+  ids: string[],
+): Promise<SponsorshipTier[]> {
+  return send<{ tiers: SponsorshipTier[] }>(
+    `/api/finance/campaigns/${campaignId}/tiers/order`,
+    'PUT',
+    { ids },
+  ).then((r) => r.tiers);
+}
+
+export function deleteTier(campaignId: string, tierId: string): Promise<{ ok: true }> {
+  return send(`/api/finance/campaigns/${campaignId}/tiers/${tierId}`, 'DELETE');
+}
+
+export function listProspects(campaignId: string): Promise<SponsorProspect[]> {
+  return get<{ prospects: SponsorProspect[] }>(
+    `/api/finance/campaigns/${campaignId}/prospects`,
+  ).then((r) => r.prospects);
+}
+
+export function createProspect(
+  campaignId: string,
+  input: {
+    org_name: string;
+    contact_name?: string | null;
+    contact_email?: string | null;
+    contact_phone?: string | null;
+    url?: string | null;
+    note?: string | null;
+    stage?: Exclude<ProspectStage, 'committed'>;
+    pledged_cents?: number | null;
+    tier_id?: string | null;
+  },
+): Promise<SponsorProspect> {
+  return send<{ prospect: SponsorProspect }>(
+    `/api/finance/campaigns/${campaignId}/prospects`,
+    'POST',
+    input,
+  ).then((r) => r.prospect);
+}
+
+/** Frozen once committed — the server answers `already_committed`. */
+export function updateProspect(
+  id: string,
+  patch: {
+    org_name?: string;
+    contact_name?: string | null;
+    contact_email?: string | null;
+    contact_phone?: string | null;
+    url?: string | null;
+    note?: string | null;
+    stage?: Exclude<ProspectStage, 'committed'>;
+    pledged_cents?: number | null;
+    tier_id?: string | null;
+  },
+): Promise<SponsorProspect> {
+  return send<{ prospect: SponsorProspect }>(
+    `/api/finance/prospects/${id}`,
+    'PATCH',
+    patch,
+  ).then((r) => r.prospect);
+}
+
+/**
+ * They said yes. Creates the sponsor record and points the prospect at it;
+ * a second press answers 409 rather than creating a second sponsor.
+ *
+ * This records a PROMISE. Money arriving is `recordSponsorPayment` below, which
+ * is coach-and-mentor only.
+ */
+export function commitProspect(
+  id: string,
+  input: { name?: string; amount_cents?: number } = {},
+): Promise<{ prospect: SponsorProspect; sponsor: Sponsor }> {
+  return send(`/api/finance/prospects/${id}/commit`, 'POST', input);
+}
+
+export function deleteProspect(id: string): Promise<{ ok: true }> {
+  return send(`/api/finance/prospects/${id}`, 'DELETE');
+}
+
+export function listSponsors(): Promise<Sponsor[]> {
+  return get<{ sponsors: Sponsor[] }>('/api/finance/sponsors').then((r) => r.sponsors);
+}
+
+export function createSponsor(input: {
+  name: string;
+  amount_cents: number;
+  campaign_id?: string | null;
+  tier_id?: string | null;
+}): Promise<Sponsor> {
+  return send<{ sponsor: Sponsor }>('/api/finance/sponsors', 'POST', input).then(
+    (r) => r.sponsor,
+  );
+}
+
+export function updateSponsor(
+  id: string,
+  patch: { name?: string; amount_cents?: number; tier_id?: string | null },
+): Promise<Sponsor> {
+  return send<{ sponsor: Sponsor }>(`/api/finance/sponsors/${id}`, 'PATCH', patch).then(
+    (r) => r.sponsor,
+  );
+}
+
+export function setSponsorThanked(id: string, thanked: boolean): Promise<Sponsor> {
+  return send<{ sponsor: Sponsor }>(`/api/finance/sponsors/${id}/thanked`, 'POST', {
+    thanked,
+  }).then((r) => r.sponsor);
+}
+
+/**
+ * Book a sponsor payment on the ledger. Coach or mentor only — every other
+ * sponsorship write records an intention; this one writes the book of record.
+ *
+ * Repeatable by design: a sponsor may pay in instalments.
+ */
+export function recordSponsorPayment(
+  id: string,
+  input: { amount_cents: number; occurred_at: number; note?: string | null },
+): Promise<{ transaction: Transaction; paid_cents: number; payment_count: number }> {
+  return send(`/api/finance/sponsors/${id}/payments`, 'POST', input);
+}
+
+/** Refused while ledger lines point at them (`sponsor_has_payments`). */
+export function deleteSponsor(id: string): Promise<{ ok: true }> {
+  return send(`/api/finance/sponsors/${id}`, 'DELETE');
 }
 
 // ------------------------------------------------------------ season purchase

@@ -34,6 +34,7 @@ export function DocEditor({
   editable,
   onChange,
   onReady,
+  placeholder = 'Start typing…',
 }: {
   docId: string;
   /** ProseMirror JSON as a string. Read ONCE — see the seeding rule below. */
@@ -45,6 +46,13 @@ export function DocEditor({
    */
   onChange: (getJSON: () => string, immediate?: boolean) => void;
   onReady?: (editor: { setContent: (content: string) => void }) => void;
+  /**
+   * The empty-document prompt. A parameter because this editor now serves two
+   * documents: meeting notes, where "Start typing…" is right because the person
+   * already knows what they came to write, and campaign pitch copy, where a
+   * blank page is genuinely hard to start and the prompt is the help.
+   */
+  placeholder?: string;
 }) {
   const editor = useEditor(
     {
@@ -56,8 +64,7 @@ export function DocEditor({
         }),
         ShiftedHeading,
         Placeholder.configure({
-          // The one string that survived lib/notes.ts.
-          placeholder: 'Start typing…',
+          placeholder,
         }),
         MediaImage,
         TaskList,

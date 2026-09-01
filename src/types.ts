@@ -294,6 +294,133 @@ export interface FinanceSummary {
   pending_estimate_cents: number;
 }
 
+// ------------------------------------------------------------- sponsorship
+
+/**
+ * Where a conversation with a business stands, mirroring PROSPECT_STAGES in
+ * worker/lib/sponsorship.ts.
+ *
+ * 'pitched' rather than 'meeting' because `meeting` is already a first-class
+ * noun here. 'committed' is set only by the commit route — the stage dropdown
+ * deliberately does not offer it, because choosing it creates a sponsor record.
+ */
+export type ProspectStage =
+  | 'researching'
+  | 'contacted'
+  | 'pitched'
+  | 'committed'
+  | 'declined';
+
+/** Ordered, because the pipeline filter chips read left to right in this order. */
+export const PROSPECT_STAGES: { id: ProspectStage; label: string }[] = [
+  { id: 'researching', label: 'Researching' },
+  { id: 'contacted', label: 'Contacted' },
+  { id: 'pitched', label: 'Pitched' },
+  { id: 'committed', label: 'Committed' },
+  { id: 'declined', label: 'Declined' },
+];
+
+/** The stages a person may choose. See the note on ProspectStage. */
+export const SETTABLE_STAGES = PROSPECT_STAGES.filter((s) => s.id !== 'committed');
+
+export interface SponsorshipTier {
+  id: string;
+  campaign_id: string;
+  name: string;
+  amount_cents: number;
+  benefits: string | null;
+  position: number;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * One fundraising push. `pitch` is ProseMirror JSON as a string and rides only
+ * the single-campaign read — the list omits it, the way NoteDocSummary omits a
+ * document's body.
+ *
+ * `pledged_cents` is what sponsors promised; `raised_cents` is what the ledger
+ * says arrived. Two numbers on purpose (see migrations/0010_sponsorship.sql).
+ */
+export interface SponsorshipCampaign {
+  id: string;
+  name: string;
+  goal_cents: number;
+  rev: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: number;
+  updated_at: number;
+  tiers: SponsorshipTier[];
+  pledged_cents: number;
+  raised_cents: number;
+  sponsor_count: number;
+  stage_counts: Partial<Record<ProspectStage, number>>;
+  /** Present only on the single-campaign read. */
+  pitch?: string;
+  pitch_text?: string;
+}
+
+/**
+ * A business the team means to approach.
+ *
+ * The contact fields hold an ADULT BUSINESS CONTACT — deliberately stored, and
+ * a different category from user emails, which this app never keeps. The
+ * argument is in migrations/0010_sponsorship.sql.
+ */
+export interface SponsorProspect {
+  id: string;
+  campaign_id: string;
+  org_name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  url: string | null;
+  note: string | null;
+  stage: ProspectStage;
+  pledged_cents: number | null;
+  tier_id: string | null;
+  source: 'manual' | 'ai';
+  stage_changed_by: string | null;
+  stage_changed_at: number | null;
+  /** Non-null once committed: the sponsor row this produced. */
+  sponsor_id: string | null;
+  created_by: string | null;
+  created_at: number;
+  updated_at: number;
+  /** Joined for display. */
+  stage_changed_by_name?: string | null;
+  tier_name?: string | null;
+}
+
+/**
+ * Somebody who said yes. `amount_cents` is the PLEDGE; `paid_cents` is the sum
+ * of ledger lines pointing at them, so a sponsor can be behind on a promise
+ * without the two numbers being reconciled behind anyone's back.
+ *
+ * `tier_name` is a snapshot taken when they committed — renaming or deleting
+ * the tier later does not rewrite what they were promised.
+ */
+export interface Sponsor {
+  id: string;
+  campaign_id: string | null;
+  name: string;
+  tier_id: string | null;
+  tier_name: string | null;
+  amount_cents: number;
+  thanked_at: number | null;
+  thanked_by: string | null;
+  created_by: string | null;
+  created_at: number;
+  updated_at: number;
+  paid_cents: number;
+  payment_count: number;
+  /** Joined for display and provenance. */
+  thanked_by_name?: string | null;
+  campaign_name?: string | null;
+  prospect_id?: string | null;
+}
+
 export interface OutreachEvent {
   id: string;
   team_id: string;

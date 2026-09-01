@@ -206,12 +206,12 @@ export const CAPABILITIES: Capability[] = [
   {
     key: 'sponsors',
     job: 'Sponsors and campaigns',
-    status: 'soon',
+    status: 'now',
     navTo: '/app/finance',
     pm: 'no',
     docs: 'manual',
     detail:
-      'Sponsor tiers, pitch copy, a prospect pipeline and whether anyone has thanked them yet. Lands in the Finance section next to the ledger their cheques already appear in.',
+      'A campaign with a goal and tiers, the pitch your students write themselves, and a pipeline of local businesses from "worth asking" to "said yes". A sponsor who commits lands next to the ledger their payments book into, so promised and received are never the same number. Thank-you status included, because that is the part teams forget. Coglin tracks the money — it does not collect it.',
     awards: ['sustain'],
   },
   {
