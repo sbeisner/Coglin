@@ -69,7 +69,7 @@ export default function AcceptInvite() {
         return;
       }
       await refresh();
-      void navigate('/');
+      void navigate('/app');
     } catch {
       setError('Could not reach Coglin. Check your connection.');
     } finally {

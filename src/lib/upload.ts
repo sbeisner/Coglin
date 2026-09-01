@@ -147,6 +147,33 @@ export async function prepareAndUpload(
   return uploadImage(blob, onProgress, url);
 }
 
+/** Server-side cap, mirrored so a PDF can be refused before it uploads. */
+const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Receipts accept PDFs, which the canvas pipeline cannot touch —
+ * `createImageBitmap` throws on one. A PDF is passed through unchanged (the
+ * server has nothing to strip from it — see sniffReceipt in worker/lib/images)
+ * and only images take the downscale path.
+ */
+export async function prepareReceiptAndUpload(
+  file: File,
+  transactionId: string,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadedMedia> {
+  const url = `/api/finance/transactions/${transactionId}/receipts`;
+  const isPdf =
+    file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  if (isPdf) {
+    if (file.size > MAX_RECEIPT_BYTES) {
+      throw new UnsupportedImage('That PDF is over the 10 MB limit.');
+    }
+    return uploadImage(file, onProgress, url);
+  }
+  const blob = await downscaleForUpload(file);
+  return uploadImage(blob, onProgress, url);
+}
+
 /** Intrinsic size, so the editor can reserve the box before the upload lands. */
 export async function measure(
   file: File,

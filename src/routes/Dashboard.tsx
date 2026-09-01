@@ -3,6 +3,7 @@ import * as api from '@/lib/api';
 import { useAsync } from '@/lib/useAsync';
 import {
   daysBetween,
+  formatCents,
   formatCount,
   formatHours,
   formatLongDate,
@@ -54,6 +55,25 @@ export default function Dashboard() {
   const coachItems = useAsync(
     () => (canManage ? api.listActionItems('open') : Promise.resolve([])),
     [canManage],
+  );
+
+  // NOT gated: the summary is readable by every role, viewers included — a
+  // sponsor is owed "where did the money go". See worker/routes/finance.ts.
+  const finance = useAsync(api.financeSummary);
+
+  /**
+   * The approval queue, for the people who can act on it. Gated at the fetch
+   * like coachItems above — not because the list is private (GET /orders is
+   * open to the team), but because for everyone else it is a card of buttons
+   * they cannot press.
+   */
+  const canApprove = canManage || member.is_purchase_approver;
+  const pendingOrders = useAsync(
+    () =>
+      canApprove
+        ? api.listPartOrders().then((list) => list.filter((o) => o.status === 'pending'))
+        : Promise.resolve([]),
+    [canApprove],
   );
 
   /**
@@ -166,13 +186,61 @@ export default function Dashboard() {
           </div>
         </section>
 
+        {/* The money, at dashboard altitude: four figures, no rows. The rows
+            live in /app/finance. */}
+        <section>
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="u-eyebrow">Money</h2>
+            <Link
+              to="/app/finance"
+              className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+            >
+              Open finance
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatTile
+              value={
+                finance.data
+                  ? formatCents(finance.data.income_cents - finance.data.expense_cents)
+                  : '—'
+              }
+              label="Balance"
+              tone={
+                finance.data &&
+                finance.data.income_cents - finance.data.expense_cents < 0
+                  ? 'alert'
+                  : 'default'
+              }
+            />
+            <StatTile
+              value={finance.data ? formatCents(finance.data.income_cents) : '—'}
+              label="Income"
+            />
+            <StatTile
+              value={finance.data ? formatCents(finance.data.expense_cents) : '—'}
+              label="Spent"
+            />
+            <StatTile
+              value={finance.data?.pending_orders ?? '—'}
+              label="Pending requests"
+              tone={finance.data && finance.data.pending_orders > 0 ? 'alert' : 'default'}
+              hint={
+                finance.data && finance.data.pending_orders > 0
+                  ? `${formatCents(finance.data.pending_estimate_cents)} if approved`
+                  : undefined
+              }
+            />
+          </div>
+        </section>
+
         <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
           {/* Award readiness — the product's whole argument, on the front page. */}
           <section>
             <div className="mb-3 flex items-baseline justify-between">
               <h2 className="u-eyebrow">Award readiness</h2>
               <Link
-                to="/awards"
+                to="/app/awards"
                 className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
               >
                 Open tracker
@@ -225,7 +293,7 @@ export default function Dashboard() {
               <div className="mb-3 flex items-baseline justify-between">
                 <h2 className="u-eyebrow">This month</h2>
                 <Link
-                  to="/meetings?view=calendar"
+                  to="/app/meetings?view=calendar"
                   className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
                 >
                   Open calendar
@@ -245,7 +313,7 @@ export default function Dashboard() {
                   density="compact"
                   selectedDay={null}
                   onSelectDay={(day) =>
-                    navigate(`/meetings?view=calendar&day=${day}`)
+                    navigate(`/app/meetings?view=calendar&day=${day}`)
                   }
                 />
               )}
@@ -257,7 +325,7 @@ export default function Dashboard() {
                 {meetings.status === 'loading' && <Skeleton className="h-16" />}
                 {nextMeeting && (
                   <Link
-                    to={`/meetings/${nextMeeting.id}`}
+                    to={`/app/meetings/${nextMeeting.id}`}
                     className="focus-visible:ring-ring block rounded focus-visible:ring-2 focus-visible:outline-none"
                   >
                     <div className="u-display text-heading text-base">
@@ -316,6 +384,58 @@ export default function Dashboard() {
               </ul>
             </section>
 
+            {/* Part orders waiting on somebody with the approve reach. Rendered
+                only for those people — for everyone else it is a card of
+                buttons they cannot press. Deciding happens on /app/finance,
+                where the deny path can ask for a reason. */}
+            {canApprove && (
+              <section>
+                <div className="mb-3 flex items-baseline justify-between">
+                  <h2 className="u-eyebrow">Awaiting approval</h2>
+                  <Link
+                    to="/app/finance"
+                    className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+                  >
+                    Open finance
+                  </Link>
+                </div>
+                <ul className="bg-card border-border divide-border divide-y rounded-lg border">
+                  {pendingOrders.status === 'loading' && (
+                    <li className="p-4">
+                      <Skeleton className="h-16" />
+                    </li>
+                  )}
+                  {(pendingOrders.data ?? []).slice(0, 5).map((order) => (
+                    <li key={order.id} className="flex items-start gap-3 px-4 py-3">
+                      <span
+                        className="bg-primary mt-1.5 size-1.5 shrink-0 rounded-[1px]"
+                        aria-hidden
+                      />
+                      <Link
+                        to="/app/finance"
+                        className="focus-visible:ring-ring min-w-0 flex-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                      >
+                        {order.qty > 1 ? `${order.qty}× ` : ''}
+                        {order.item}
+                        <span className="text-muted-foreground block text-xs">
+                          {order.requested_by_name ?? 'Someone'}
+                        </span>
+                      </Link>
+                      <span className="tabular text-muted-foreground shrink-0 font-mono text-xs">
+                        {formatCents(order.qty * order.unit_price_cents)}
+                      </span>
+                    </li>
+                  ))}
+                  {pendingOrders.status === 'ready' &&
+                    (pendingOrders.data ?? []).length === 0 && (
+                      <li className="text-muted-foreground px-4 py-6 text-center text-sm">
+                        Nothing waiting on you.
+                      </li>
+                    )}
+                </ul>
+              </section>
+            )}
+
             {/* The coach's own follow-ups, across every meeting. Same dot, tone
                 and relativeDays vocabulary as "Needs attention" above, so the two
                 read as one system rather than two lists that happen to be
@@ -343,7 +463,7 @@ export default function Dashboard() {
                         aria-hidden
                       />
                       <Link
-                        to={`/meetings/${item.meeting_id}`}
+                        to={`/app/meetings/${item.meeting_id}`}
                         className="focus-visible:ring-ring min-w-0 flex-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
                       >
                         {item.text}

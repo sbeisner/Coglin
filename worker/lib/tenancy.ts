@@ -24,6 +24,12 @@ export interface MemberRow {
   display_name: string;
   handle: string | null;
   sub_teams: string;
+  /**
+   * 0 or 1. Grants part-order approval to members who are not coaches or
+   * mentors — see canApproveOrders in lib/finance.ts, which is the only reader
+   * and owns the argument for why this is a flag and not a role.
+   */
+  is_purchase_approver: number;
 }
 
 export interface AuthContext {
@@ -79,7 +85,8 @@ export const requireMember: MiddlewareHandler<AppEnv> = async (c, next) => {
   // brings the team switcher that will make this an explicit choice; until
   // then, oldest membership wins and it is deterministic.
   const member = await c.env.DB.prepare(
-    `SELECT id, team_id, role, display_name, handle, sub_teams
+    `SELECT id, team_id, role, display_name, handle, sub_teams,
+            is_purchase_approver
        FROM members
       WHERE user_id = ? AND status = 'active'
       ORDER BY created_at ASC

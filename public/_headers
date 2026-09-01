@@ -1,0 +1,14 @@
+# Cloudflare static-asset headers.
+
+# Vite fingerprints these filenames by content, so the bytes behind a given URL
+# can never change. They were being served max-age=0, must-revalidate, which
+# made every repeat visit re-check every script, stylesheet and screenshot.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# HTML must revalidate: these paths are stable and their contents are not.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

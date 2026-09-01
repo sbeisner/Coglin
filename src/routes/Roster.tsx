@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { HandCoins } from 'lucide-react';
 import * as api from '@/lib/api';
 import { useAsync } from '@/lib/useAsync';
 import { useSession } from '@/lib/session';
@@ -137,6 +138,21 @@ function MemberRow({
   canManage: boolean;
   onChanged: () => void;
 }) {
+  const [savingApprover, setSavingApprover] = useState(false);
+
+  async function toggleApprover() {
+    setSavingApprover(true);
+    try {
+      await api.setPurchaseApprover(member.id, !member.is_purchase_approver);
+      onChanged();
+    } catch {
+      // The reload below never fires, so the button simply stays as it was —
+      // an unchanged toggle is the honest report of a failed toggle.
+    } finally {
+      setSavingApprover(false);
+    }
+  }
+
   return (
     <li className="bg-card border-border flex items-center gap-3 rounded-lg border px-3 py-2.5">
       {/* Photos exist so a coach can put faces to names in September. The
@@ -158,6 +174,46 @@ function MemberRow({
           )}
         </div>
       </div>
+      {/* The part-order approver grant, students only: coaches and mentors
+          approve regardless (worker/lib/finance.ts), and a viewer with the
+          flag would still be refused — so the toggle is only offered where it
+          means something. A coach flips it; everyone else just sees it. */}
+      {member.role === 'student' &&
+        (canManage ? (
+          <button
+            type="button"
+            aria-pressed={member.is_purchase_approver}
+            aria-label={
+              member.is_purchase_approver
+                ? `${member.display_name} can approve part orders — revoke`
+                : `Let ${member.display_name} approve part orders`
+            }
+            title={
+              member.is_purchase_approver
+                ? 'Can approve part orders'
+                : 'Grant part-order approval'
+            }
+            disabled={savingApprover}
+            onClick={() => void toggleApprover()}
+            className={cn(
+              'focus-visible:ring-ring flex size-11 shrink-0 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none md:size-7',
+              member.is_purchase_approver
+                ? 'border-primary bg-primary/10 text-primary-ink border'
+                : 'text-muted-foreground hover:text-primary-ink',
+            )}
+          >
+            <HandCoins className="size-4" aria-hidden />
+          </button>
+        ) : (
+          member.is_purchase_approver && (
+            <span
+              className="text-primary-ink shrink-0"
+              title="Can approve part orders"
+            >
+              <HandCoins className="size-4" aria-hidden />
+            </span>
+          )
+        ))}
       <span
         className={cn(
           'shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium',

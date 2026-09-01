@@ -92,7 +92,7 @@ export default function Notes() {
       try {
         const doc = await api.createDoc({ ...input, title: 'Untitled' });
         reload();
-        navigate(`/notes/${doc.id}`);
+        navigate(`/app/notes/${doc.id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : '');
       }
@@ -109,7 +109,7 @@ export default function Notes() {
    */
   const onRename = useCallback(
     (doc: NoteDocSummary) => {
-      navigate(`/notes/${doc.id}?rename=1`);
+      navigate(`/app/notes/${doc.id}?rename=1`);
     },
     [navigate],
   );
@@ -120,7 +120,7 @@ export default function Notes() {
       try {
         const result = await api.deleteDoc(doc.id);
         reload();
-        if (docId && result.deleted.includes(docId)) navigate('/notes');
+        if (docId && result.deleted.includes(docId)) navigate('/app/notes');
       } catch (err) {
         setError(err instanceof Error ? err.message : '');
       }
@@ -324,7 +324,7 @@ function DocPane({
         aside="It may have been deleted, or it belongs to another team."
         action={
           <Button asChild size="sm" variant="outline">
-            <Link to="/notes">Back to notes</Link>
+            <Link to="/app/notes">Back to notes</Link>
           </Button>
         }
       />
@@ -334,7 +334,7 @@ function DocPane({
   return (
     <div className="space-y-3">
       <Link
-        to="/notes"
+        to="/app/notes"
         className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1.5 text-sm md:hidden"
       >
         <ArrowLeft className="size-4" aria-hidden />

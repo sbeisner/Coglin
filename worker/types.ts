@@ -12,12 +12,6 @@ export type Bindings = {
   ENVIRONMENT?: string;
   /** Extra entropy for session token hashing. Set as a secret per environment. */
   SESSION_PEPPER?: string;
-  /**
-   * Shared code required by POST /api/auth/coach-signup. Production is at a
-   * guessable URL and self-serve onboarding (COG-018) does not exist yet, so
-   * without this anyone could mint a team. Unset means signup is closed.
-   */
-  ALPHA_SIGNUP_CODE?: string;
   /** Absolute base URL used to build invite links in outgoing mail. */
   APP_BASE_URL?: string;
   /**
@@ -26,4 +20,61 @@ export type Bindings = {
    * behaviour in local dev and a survivable one in production.
    */
   RESEND_API_KEY?: string;
+  /**
+   * Where new-team signup alerts go (COG-041). Comma-separated for more than
+   * one. Our own address, never anything derived from a request.
+   *
+   * Optional, and unset is the right default off-production: it means signup
+   * sends no alert at all, so local dev and the test suite cannot mail a real
+   * person. Alerts also require RESEND_API_KEY — same transport as invites.
+   */
+  SIGNUP_ALERT_TO?: string;
+  /**
+   * Where in-app bug reports go (COG-0xx). Same shape and same reasoning as
+   * SIGNUP_ALERT_TO above: our own address, comma-separated for more than one,
+   * never anything derived from a request.
+   *
+   * Separate from SIGNUP_ALERT_TO rather than a shared OPERATOR_ALERT_TO
+   * because the two have different volumes and different urgencies — a signup
+   * is a handful a season and worth a notification, a bug report during the
+   * alpha is a stream and belongs in whatever gets read in batches. Splitting
+   * them now is one line. Splitting them once a filter exists is a migration of
+   * somebody's mail rules.
+   *
+   * Unset means the report is still written to bug_reports and the reporter is
+   * told so honestly — it means no mail, not no report.
+   */
+  BUG_ALERT_TO?: string;
+  /**
+   * Stripe, for the alpha pricing page (COG-047). Optional in the same sense as
+   * RESEND_API_KEY above: unset means the /pricing page's pay button answers 503
+   * and everything else in the app is unaffected. Access is not gated on payment
+   * during the alpha, so a Coglin deploy with no billing configured is valid.
+   *
+   * The secret key is SHARED with Inkubus. The webhook secret is not — it belongs
+   * to the endpoint registered for this hostname and no other.
+   */
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  /**
+   * A Stripe product id (`prod_...`), NOT a secret — it lives in wrangler.jsonc
+   * next to the other non-secret config, the way Inkubus keeps its PRICE_* ids.
+   *
+   * Optional, and the fallback is the reason: without it every Checkout Session
+   * passes `product_data`, which makes Stripe mint a BRAND NEW product per
+   * purchase. Checkout works fine either way, but after a season the catalog is
+   * fifty identical rows and revenue-by-product reporting is meaningless. Set
+   * this and every sale rolls up under one product.
+   */
+  STRIPE_PRODUCT_ID?: string;
+  /**
+   * Cloudflare Turnstile, guarding the one public endpoint that creates Stripe
+   * sessions. Unset means the challenge is skipped, not that requests are denied
+   * — the server-side amount clamp is the control that does not depend on
+   * configuration being complete.
+   *
+   * PAIRED with the build-time VITE_TURNSTILE_SITE_KEY. Setting this without
+   * that one rejects every checkout, because the page never sends a token.
+   */
+  TURNSTILE_SECRET_KEY?: string;
 };

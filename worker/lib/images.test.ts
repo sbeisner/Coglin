@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import {
   dimensions,
   sniff,
+  sniffReceipt,
   stripMetadata,
   type ImageType,
 } from './images';
@@ -210,6 +211,31 @@ describe('sniff', () => {
     expect(sniff(new Uint8Array(0))).toBeNull();
     expect(sniff(bytes(0x89, 0x50))).toBeNull();
     expect(sniff(bytes(0xff, 0xd8))).toBeNull();
+  });
+});
+
+// ------------------------------------------------------------ sniffReceipt
+
+describe('sniffReceipt', () => {
+  it('accepts a PDF that plain sniff rejects', () => {
+    const pdf = join(ascii('%PDF-1.7'), bytes(0x0a, 0, 0, 0));
+    expect(sniff(pdf)).toBeNull();
+    expect(sniffReceipt(pdf)).toBe('application/pdf');
+  });
+
+  it('falls through to sniff for images', () => {
+    expect(sniffReceipt(png(4, 4))).toBe('image/png');
+    expect(sniffReceipt(jpeg(4, 4))).toBe('image/jpeg');
+  });
+
+  // The widened list must not widen the XSS surface: SVG stays out, and so
+  // does anything merely CLAIMING to be a PDF without the signature.
+  it('still rejects an SVG and near-miss PDF signatures', () => {
+    const svg = ascii('<svg xmlns="http://www.w3.org/2000/svg"/>');
+    expect(sniffReceipt(svg)).toBeNull();
+    expect(sniffReceipt(ascii('%PDX-1.7 not a pdf'))).toBeNull();
+    expect(sniffReceipt(ascii(' %PDF-1.7'))).toBeNull(); // signature must be at offset 0
+    expect(sniffReceipt(ascii('%PDF'))).toBeNull(); // truncated before the dash
   });
 });
 

@@ -73,31 +73,116 @@ describe('coach signup', () => {
     expect(((await season.json()) as { is_current: number }).is_current).toBe(1);
   });
 
-  it('refuses without the alpha signup code', async () => {
+  it('lets anyone sign up, with no code', async () => {
+    // Signup was gated on ALPHA_SIGNUP_CODE until the pricing page made that
+    // incoherent: the site asked for money and then refused the buyer an
+    // account. This asserts the gate is really gone rather than defaulting shut
+    // on a missing binding, which is how it used to fail.
     const response = await call('/api/auth/coach-signup', {
       method: 'POST',
       body: JSON.stringify({
-        code: 'wrong',
-        email: 'nope@example.com',
+        email: 'open@example.com',
         password: 'correct horse battery',
-        display_name: 'Nope',
+        display_name: 'Open Signup',
         team_number: 999,
-        team_name: 'Nope',
+        team_name: 'Open Signup',
       }),
     });
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(201);
+  });
+
+  /**
+   * The other side of opening it up. `teams.team_number` is UNIQUE and nothing
+   * checks that you are on the team you claim, so the first person to type a
+   * number owns it. Documented here because the 409 is the ONLY thing standing
+   * between two teams and a silently shared season.
+   */
+  it('refuses a team number somebody already registered', async () => {
+    await signUpCoach(4242);
+    const response = await call('/api/auth/coach-signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: 'squatter@example.com',
+        password: 'correct horse battery',
+        display_name: 'Squatter',
+        team_number: 4242,
+        team_name: 'Also 4242',
+      }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'already_exists' });
   });
 
   it('rejects a cross-site POST even with a valid body', async () => {
     const request = new Request(`${ORIGIN}/api/auth/coach-signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: 'https://evil.test' },
-      body: JSON.stringify({ code: env.ALPHA_SIGNUP_CODE }),
+      body: JSON.stringify({ email: 'x@example.com', team_number: 5150 }),
     });
     const ctx = createExecutionContext();
     const response = await worker.fetch(request, env, ctx);
     await waitOnExecutionContext(ctx);
     expect(response.status).toBe(403);
+  });
+});
+
+/**
+ * Signup alerts. `SIGNUP_ALERT_TO` is unset everywhere else — including
+ * vitest.config.ts — so every other suite signs coaches up without generating
+ * mail. These tests opt in by setting it for their own duration, which also
+ * keeps the invite assertions above free of stray entries in `resendCalls`.
+ */
+describe('new-team signup alert', () => {
+  const withAlertTo = async (address: string, fn: () => Promise<void>) => {
+    const previous = env.SIGNUP_ALERT_TO;
+    env.SIGNUP_ALERT_TO = address;
+    try {
+      await fn();
+    } finally {
+      env.SIGNUP_ALERT_TO = previous;
+    }
+  };
+
+  it('mails the operator with the team, coach and season', async () => {
+    await withAlertTo('admin@lilithforge.com', async () => {
+      await signUpCoach(8801, { region: 'Maryland', display_name: 'Dana Vance' });
+    });
+
+    expect(resendCalls).toHaveLength(1);
+    const { body } = resendCalls[0];
+    expect(body.to).toEqual(['admin@lilithforge.com']);
+    expect(String(body.subject)).toContain('8801 Team 8801');
+    const text = String(body.text);
+    expect(text).toContain('Dana Vance');
+    expect(text).toContain('coach8801@example.com');
+    expect(text).toContain('Maryland');
+  });
+
+  it('sends to every address in a comma-separated list', async () => {
+    await withAlertTo('admin@lilithforge.com, steven@example.com', async () => {
+      await signUpCoach(8802);
+    });
+
+    expect(resendCalls).toHaveLength(1);
+    expect(resendCalls[0].body.to).toEqual([
+      'admin@lilithforge.com',
+      'steven@example.com',
+    ]);
+  });
+
+  it('sends nothing when no alert address is configured', async () => {
+    await signUpCoach(8803);
+    expect(resendCalls).toHaveLength(0);
+  });
+
+  it('still creates the team when the alert fails to send', async () => {
+    resendMode = 'network-error';
+    await withAlertTo('admin@lilithforge.com', async () => {
+      const cookie = await signUpCoach(8804);
+      const me = await call('/api/auth/me', { cookie });
+      expect(me.status).toBe(200);
+      expect(await me.json()).toMatchObject({ authenticated: true });
+    });
   });
 });
 

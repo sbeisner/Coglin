@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
-import { Menu } from 'lucide-react';
+import { Bug, Menu } from 'lucide-react';
 import { NAV } from '@/lib/nav';
 import { useSession, useSessionState } from '@/lib/session';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { ReportBugDialog } from '@/components/ReportBugDialog';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import type { Session } from '@/lib/session';
 import { cn } from '@/lib/utils';
@@ -11,16 +12,35 @@ import { cn } from '@/lib/utils';
 const PRIMARY = NAV.filter((n) => n.primary);
 
 /**
+ * The dashboard's path, and the reason it needs naming.
+ *
+ * Every app route is nested under it, so a NavLink pointing here prefix-matches
+ * the whole product and the dashboard renders as active on every screen. It has
+ * to opt out with `end`, in BOTH the sidebar and the mobile tab bar — a constant
+ * rather than the literal twice, because the two call sites are 100 lines apart
+ * and the bug is invisible until you look at a second screen.
+ *
+ * This did not bite when the dashboard was at `/`: react-router only treats a
+ * prefix as a match when the next character is a separator, and for `/` the next
+ * character of `/boards` is `b`. Moving to `/app` made `/app/boards` a genuine
+ * segment match, which is correct behaviour and exactly what `end` is for.
+ */
+const APP_ROOT = '/app';
+
+/**
  * The nav entry a path belongs to, matching by prefix rather than equality.
  *
  * Meetings introduced the app's first nested route. With an exact match
  * `/meetings/<id>` matches nothing, so a student taking notes on a phone sees
  * the shell titled "Coglin" — no error, just a screen that has forgotten what
- * it is. `/` is special-cased because every path starts with it.
+ * it is. `/app` is special-cased because every app path starts with it — the
+ * dashboard would otherwise match every screen in the product.
  */
 function navItemFor(pathname: string) {
   return NAV.find((n) =>
-    n.to === '/' ? pathname === '/' : pathname === n.to || pathname.startsWith(`${n.to}/`),
+    n.to === APP_ROOT
+      ? pathname === APP_ROOT
+      : pathname === n.to || pathname.startsWith(`${n.to}/`),
   );
 }
 
@@ -33,6 +53,11 @@ function navItemFor(pathname: string) {
  */
 export function AppShell() {
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Owned here rather than inside SidebarFoot, which renders TWICE — once in
+  // the desktop aside and once inside the mobile sheet. Local state there would
+  // mean two dialogs, and the sheet's copy unmounts when the sheet closes,
+  // which would take an open dialog with it.
+  const [bugOpen, setBugOpen] = useState(false);
   const location = useLocation();
   const current = navItemFor(location.pathname);
   const { team } = useSession();
@@ -61,7 +86,7 @@ export function AppShell() {
             ))}
           </ul>
         </nav>
-        <SidebarFoot />
+        <SidebarFoot onReportBug={() => setBugOpen(true)} />
       </aside>
 
       {/* ---------- Mobile top bar ---------- */}
@@ -99,7 +124,14 @@ export function AppShell() {
                 ))}
               </ul>
             </nav>
-            <SidebarFoot />
+            <SidebarFoot
+              onReportBug={() => {
+                // Close the sheet on the way out, so the dialog is not a
+                // second layer stacked on the drawer's own.
+                setSheetOpen(false);
+                setBugOpen(true);
+              }}
+            />
           </SheetContent>
         </Sheet>
       </div>
@@ -125,7 +157,7 @@ export function AppShell() {
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
+            end={to === APP_ROOT}
             className={({ isActive }) =>
               cn(
                 // 44px minimum touch target — pit day, cold hands, gloves.
@@ -149,6 +181,11 @@ export function AppShell() {
           </NavLink>
         ))}
       </nav>
+
+      {/* Rendered outside both the sidebar and the sheet — see the note on
+          bugOpen above. Nothing about it is a floating action button: the tab
+          bar above owns the bottom of a phone screen. */}
+      <ReportBugDialog open={bugOpen} onOpenChange={setBugOpen} />
     </div>
   );
 }
@@ -188,8 +225,13 @@ function TeamMark({ team }: { team: Session['team'] }) {
  * The mark is a mask tinted by the palette (`.cog-mark` in index.css), so it
  * stays correct if the slab or the brand colour is ever retuned — no second
  * asset, and no filter trickery to get dark artwork onto a dark surface.
+ *
+ * The bug button lives here rather than in a floating action button because
+ * this component is rendered on BOTH surfaces — desktop sidebar and mobile
+ * sheet — so one row covers both. A FAB would have to clear the tab bar, whose
+ * grid-cols-4 and <main>'s pb-20 are already load-bearing (see above).
  */
-function SidebarFoot() {
+function SidebarFoot({ onReportBug }: { onReportBug: () => void }) {
   const { member } = useSession();
   const { refresh } = useSessionState();
 
@@ -203,6 +245,18 @@ function SidebarFoot() {
 
   return (
     <>
+      {/* Full-width row, not a small text button: this is the target a cold
+          thumb finds in a pit, and min-h-11 is the 44px rule this file already
+          applies to the tab bar. */}
+      <button
+        type="button"
+        onClick={onReportBug}
+        className="border-ink-border text-ink-subtle hover:bg-ink-foreground/6 hover:text-ink-foreground focus-visible:ring-ring flex min-h-11 w-full items-center gap-2 border-t px-3 py-2.5 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <Bug className="size-3.5 shrink-0" aria-hidden />
+        Report a bug
+      </button>
+
       <div className="border-ink-border flex items-center justify-between gap-2 border-t px-3 py-2.5">
         <span className="text-ink-muted min-w-0 truncate text-xs">
           {member.display_name}
@@ -238,7 +292,7 @@ function SideLink({
   return (
     <NavLink
       to={to}
-      end={to === '/'}
+      end={to === APP_ROOT}
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(

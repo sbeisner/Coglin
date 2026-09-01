@@ -4,10 +4,9 @@
  * This screen exists because the API endpoint alone is not a signup path — a
  * coach who lands on Coglin needs a door, not a curl command.
  *
- * The access code is asked for **first**, and deliberately so. Coglin is
- * invite-only during the alpha, and finding that out after typing a team
- * number, a team name, an email and a password is a small insult. Leading with
- * it sets the expectation honestly.
+ * Open signup. It used to lead with an access code, which stopped making sense
+ * once the site started asking for money: a page that sells you a season and
+ * then refuses you an account is not a funnel.
  */
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -24,8 +23,6 @@ const MIN_PASSWORD = 8;
  * without promising which.
  */
 const MESSAGES: Record<string, string> = {
-  forbidden:
-    "That access code isn't valid. Coglin is invite-only during the alpha — check the code with whoever sent it.",
   already_exists:
     'An account or team already exists with those details. Try signing in instead.',
   invalid_email: 'That email address does not look right.',
@@ -59,7 +56,6 @@ export default function Signup() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({
-          code: String(data.get('code') ?? '').trim(),
           email: String(data.get('email') ?? ''),
           password,
           display_name: String(data.get('display_name') ?? ''),
@@ -81,7 +77,7 @@ export default function Signup() {
       // dashboard rather than being bounced to a login screen to retype what
       // they just chose.
       await refresh();
-      void navigate('/');
+      void navigate('/app');
     } catch {
       setError('Could not reach Coglin. Check your connection.');
     } finally {
@@ -104,17 +100,6 @@ export default function Signup() {
         </p>
 
         <form onSubmit={onSubmit} className="space-y-4">
-          <Field
-            name="code"
-            label="Access code"
-            required
-            autoCapitalize="none"
-            spellCheck={false}
-            hint="Coglin is invite-only while it's in alpha."
-          />
-
-          <hr className="border-border" />
-
           <Field
             name="team_number"
             label="Team number"

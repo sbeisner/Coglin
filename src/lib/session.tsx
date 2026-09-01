@@ -24,6 +24,8 @@ export interface SessionMember {
   display_name: string;
   handle: string | null;
   sub_teams: SubTeam[];
+  /** Whether to offer the part-order approve buttons. The routes still decide. */
+  is_purchase_approver: boolean;
 }
 
 export interface Session {

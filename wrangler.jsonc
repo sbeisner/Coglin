@@ -49,7 +49,34 @@
         "run_worker_first": ["/api/*", "/media/*"]
       },
       "observability": { "enabled": true },
-      "vars": { "ENVIRONMENT": "staging" },
+      // STRIPE_PRODUCT_ID is the Stripe product every purchase rolls up under.
+      // Not a secret, so it lives here rather than in `wrangler secret put`.
+      //
+      // IT IS MODE-SPECIFIC. A prod_ id created in Stripe TEST mode does not
+      // exist in live mode: pair a test id with a live secret key and every
+      // checkout fails with "No such product". Swap this at go-live in the same
+      // pass as STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET, and remember this
+      // one needs a redeploy while the secrets do not.
+      //
+      // Unset is safe: the code falls back to naming the product inline, at the
+      // cost of Stripe minting a new product per sale.
+      //
+      // SIGNUP_ALERT_TO is where "a new team signed up" mail lands. Not a
+      // secret, and deliberately config rather than a constant so the address
+      // can change without a code edit (it still needs a redeploy). Comma-
+      // separate for more than one recipient. Leaving it unset disables the
+      // alert entirely, which is what local dev and the test suite rely on.
+      //
+      // BUG_ALERT_TO is the same idea for in-app bug reports. Kept separate
+      // from SIGNUP_ALERT_TO so the two streams can be filtered apart later
+      // without a code change — see worker/types.ts. Unset disables the mail,
+      // not the report: the row is still written either way.
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "STRIPE_PRODUCT_ID": "prod_VAWjS8LhOV8WNO",
+        "SIGNUP_ALERT_TO": "admin@lilithforge.com",
+        "BUG_ALERT_TO": "admin@lilithforge.com"
+      },
       // Flat, single-level subdomain on purpose. Cloudflare Universal SSL
       // covers *.lilithforge.com but NOT two-level names like
       // staging.coglin.lilithforge.com — those need paid Advanced Certificate
@@ -83,7 +110,14 @@
         "run_worker_first": ["/api/*", "/media/*"]
       },
       "observability": { "enabled": true },
-      "vars": { "ENVIRONMENT": "production" },
+      // See the note in the staging block: this id is test-mode today and must
+      // be replaced with the live-mode product id at go-live.
+      "vars": {
+        "ENVIRONMENT": "production",
+        "STRIPE_PRODUCT_ID": "prod_VAWjS8LhOV8WNO",
+        "SIGNUP_ALERT_TO": "admin@lilithforge.com",
+        "BUG_ALERT_TO": "admin@lilithforge.com"
+      },
       "routes": [
         { "pattern": "coglin.lilithforge.com", "custom_domain": true }
       ],

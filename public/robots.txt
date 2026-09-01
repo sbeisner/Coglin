@@ -1,0 +1,13 @@
+# Coglin. The zone also prepends Cloudflare's managed content-signals block, so
+# the served file has two "User-agent: *" groups — compliant crawlers merge
+# groups for the same agent, so both apply. See website/README.md.
+
+User-agent: *
+Allow: /
+
+# The application itself is behind a login and has nothing to index.
+Disallow: /app/
+Disallow: /api/
+Disallow: /invite/
+
+Sitemap: https://coglin.lilithforge.com/sitemap.xml

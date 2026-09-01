@@ -49,11 +49,31 @@ export const ALLOWED_TYPES: readonly ImageType[] = [
   'image/webp',
 ];
 
-export const EXTENSIONS: Record<ImageType, string> = {
+/**
+ * Images plus PDF, for receipt uploads only.
+ *
+ * A receipt is as often a vendor's emailed PDF as a photo of a paper slip, so
+ * the finance routes accept both. PDF is NOT added to ALLOWED_TYPES: a PDF
+ * pasted into meeting notes would store a file the <img> tag renders as
+ * nothing, and the notes upload path should keep refusing it plainly.
+ *
+ * The stored-XSS argument that bans SVG does not extend to PDF — /media/:id
+ * serves with nosniff and browsers open PDFs in their own sandboxed viewer,
+ * where embedded script cannot reach the page origin. SVG stays out.
+ */
+export type ReceiptType = ImageType | 'application/pdf';
+
+export const RECEIPT_TYPES: readonly ReceiptType[] = [
+  ...ALLOWED_TYPES,
+  'application/pdf',
+];
+
+export const EXTENSIONS: Record<ReceiptType, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/gif': 'gif',
   'image/webp': 'webp',
+  'application/pdf': 'pdf',
 };
 
 export interface Dimensions {
@@ -109,6 +129,34 @@ export function sniff(bytes: Uint8Array): ImageType | null {
     return 'image/webp';
   }
   return null;
+}
+
+/**
+ * `sniff`, widened to accept PDF, for receipt uploads.
+ *
+ * A separate function rather than a wider return type on `sniff` itself, so
+ * every existing image caller keeps a type system that cannot hand it a PDF.
+ *
+ * PDF metadata (the Info dictionary, XMP) is deliberately NOT stripped the way
+ * image EXIF is. A receipt PDF is a vendor's document about a purchase, not a
+ * file produced on a child's phone — there are no GPS coordinates in it, and
+ * rewriting PDF object graphs to remove an author string is real parser risk
+ * for no protective gain. If that judgement changes, change it here and in
+ * ingestImage's strip branch together.
+ */
+export function sniffReceipt(bytes: Uint8Array): ReceiptType | null {
+  // %PDF- — the five-byte signature every PDF version starts with.
+  if (
+    bytes.length >= 5 &&
+    bytes[0] === 0x25 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x44 &&
+    bytes[3] === 0x46 &&
+    bytes[4] === 0x2d
+  ) {
+    return 'application/pdf';
+  }
+  return sniff(bytes);
 }
 
 // --------------------------------------------------------------- dimensions

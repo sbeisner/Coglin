@@ -1,15 +1,18 @@
 import { Hono } from 'hono';
 import { auth } from './routes/auth';
 import { invites } from './routes/invites';
+import { bugs } from './routes/bugs';
 import { team } from './routes/team';
 import { boards } from './routes/boards';
 import { candidates } from './routes/candidates';
+import { finance } from './routes/finance';
 import { media, mediaFiles } from './routes/media';
 import { meetings } from './routes/meetings';
 import { meetingNotes } from './routes/notes';
 import { docs } from './routes/docs';
 import { records } from './routes/records';
 import { series } from './routes/series';
+import { billing } from './routes/billing';
 import { scheduled } from './backup';
 import type { AppEnv } from './lib/tenancy';
 
@@ -70,6 +73,7 @@ app.get('/api/health', async (c) => {
 
 app.route('/api/auth', auth);
 app.route('/api/invites', invites);
+app.route('/api/bug-reports', bugs);
 // `meetingNotes` is mounted first because it claims the deeper paths under a
 // meeting (/:id/agenda, /:id/start); `meetings` owns /:id itself.
 app.route('/api/meetings', meetingNotes);
@@ -80,6 +84,7 @@ app.route('/api/series', series);
 // dragged to another one. See the header of routes/docs.ts.
 app.route('/api/notes', docs);
 app.route('/api/portfolio', candidates);
+app.route('/api/finance', finance);
 app.route('/api/media', media);
 // Both declare full paths ('/boards', '/meetings/:id/attendance') rather than a
 // prefix, so they mount at /api alongside `team`.
@@ -88,6 +93,11 @@ app.route('/api', records);
 // Mounted last of the /api routes because `team` declares bare paths ('/team',
 // '/members') rather than a prefix, so it would otherwise shadow siblings.
 app.route('/api', team);
+
+// Public and unauthenticated, unlike everything above it — a coach can pay
+// before they have an account, and Stripe posts the webhook with no session at
+// all. Neither route touches a tenant table; see routes/billing.ts.
+app.route('/api/billing', billing);
 
 app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404));
 

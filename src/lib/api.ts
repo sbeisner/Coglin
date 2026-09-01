@@ -23,7 +23,10 @@
  * dashboard. The only version of this that is actually safe is not importing
  * it. Verify with `npm run build && grep -r "Chesapeake" dist/`.
  *
- *   VITE_DEMO_DATA=1 npm run dev
+ * There is no VITE_DEMO_DATA flag any more either; this comment described one
+ * for a while after it was deleted. Sample data for the marketing screenshots
+ * is seeded into a LOCAL DATABASE by `scripts/seed-demo.mjs` and photographed —
+ * it never enters the bundle, which is the only arrangement that has ever held.
  *
  * Note there is no `team_id` parameter anywhere. The server derives the tenant
  * from the session's membership row (plan §6); a client that can name its own
@@ -49,14 +52,19 @@ import type {
   OpenActionItem,
   MeetingKind,
   MeetingSeries,
+  FinanceSummary,
   MeetingStatus,
   MeetingSummary,
   Member,
   OutreachEvent,
+  PartOrder,
   PortfolioCandidate,
   Season,
   Task,
   Team,
+  Transaction,
+  TransactionCategory,
+  TransactionKind,
 } from '@/types';
 
 /** Small delay so loading states are real and get designed, not skipped. */
@@ -737,6 +745,170 @@ export function deleteMemberPhoto(memberId: string): Promise<{ ok: true }> {
   return send(`/api/members/${memberId}/photo`, 'DELETE');
 }
 
+// -------------------------------------------------------------------- finance
+
+/**
+ * The season's ledger, receipts riding along. Readable by every role — a
+ * viewer is a parent or a sponsor, and where the money went is exactly what a
+ * sponsor is owed. Writes below are coach/mentor, enforced server-side.
+ */
+export function listTransactions(): Promise<Transaction[]> {
+  return get<{ transactions: Transaction[] }>('/api/finance/transactions').then(
+    (r) => r.transactions,
+  );
+}
+
+export function createTransaction(input: {
+  kind: TransactionKind;
+  category: TransactionCategory;
+  label: string;
+  note?: string | null;
+  amount_cents: number;
+  occurred_at: number;
+}): Promise<Transaction> {
+  return send<{ transaction: Transaction }>(
+    '/api/finance/transactions',
+    'POST',
+    input,
+  ).then((r) => r.transaction);
+}
+
+export function updateTransaction(
+  id: string,
+  patch: {
+    kind?: TransactionKind;
+    category?: TransactionCategory;
+    label?: string;
+    note?: string | null;
+    amount_cents?: number;
+    occurred_at?: number;
+  },
+): Promise<Transaction> {
+  return send<{ transaction: Transaction }>(
+    `/api/finance/transactions/${id}`,
+    'PATCH',
+    patch,
+  ).then((r) => r.transaction);
+}
+
+/** Removes the line and its receipts together — see the route's header. */
+export function deleteTransaction(id: string): Promise<{ ok: true }> {
+  return send(`/api/finance/transactions/${id}`, 'DELETE');
+}
+
+export function deleteReceipt(
+  transactionId: string,
+  mediaId: string,
+): Promise<{ ok: true }> {
+  return send(
+    `/api/finance/transactions/${transactionId}/receipts/${mediaId}`,
+    'DELETE',
+  );
+}
+
+export function financeSummary(): Promise<FinanceSummary> {
+  return get<FinanceSummary>('/api/finance/summary');
+}
+
+export function listPartOrders(): Promise<PartOrder[]> {
+  return get<{ orders: PartOrder[] }>('/api/finance/orders').then((r) => r.orders);
+}
+
+export function createPartOrder(input: {
+  item: string;
+  description?: string | null;
+  url?: string | null;
+  vendor?: string | null;
+  qty: number;
+  unit_price_cents: number;
+}): Promise<PartOrder> {
+  return send<{ order: PartOrder }>('/api/finance/orders', 'POST', input).then(
+    (r) => r.order,
+  );
+}
+
+/** Editable only while pending — after a decision the row is what was decided on. */
+export function updatePartOrder(
+  id: string,
+  patch: {
+    item?: string;
+    description?: string | null;
+    url?: string | null;
+    vendor?: string | null;
+    qty?: number;
+    unit_price_cents?: number;
+  },
+): Promise<PartOrder> {
+  return send<{ order: PartOrder }>(`/api/finance/orders/${id}`, 'PATCH', patch).then(
+    (r) => r.order,
+  );
+}
+
+export function decidePartOrder(
+  id: string,
+  decision: 'approved' | 'denied',
+  note?: string,
+): Promise<PartOrder> {
+  return send<{ order: PartOrder }>(`/api/finance/orders/${id}/decision`, 'POST', {
+    decision,
+    note,
+  }).then((r) => r.order);
+}
+
+/** Books the expense line in the same batch — see the route's header. */
+export function markOrderOrdered(id: string): Promise<PartOrder> {
+  return send<{ order: PartOrder }>(`/api/finance/orders/${id}/ordered`, 'POST').then(
+    (r) => r.order,
+  );
+}
+
+export function markOrderReceived(id: string): Promise<PartOrder> {
+  return send<{ order: PartOrder }>(`/api/finance/orders/${id}/received`, 'POST').then(
+    (r) => r.order,
+  );
+}
+
+export function cancelPartOrder(id: string): Promise<PartOrder> {
+  return send<{ order: PartOrder }>(`/api/finance/orders/${id}/cancel`, 'POST').then(
+    (r) => r.order,
+  );
+}
+
+/** Grant or revoke the part-order approver flag. Coach/mentor only. */
+export function setPurchaseApprover(
+  memberId: string,
+  isApprover: boolean,
+): Promise<{ ok: true; is_purchase_approver: boolean }> {
+  return send(`/api/members/${memberId}`, 'PATCH', {
+    is_purchase_approver: isApprover,
+  });
+}
+
+// ------------------------------------------------------------ season purchase
+
+/**
+ * Start a Stripe Checkout Session for one season, at the price the buyer set
+ * (COG-047).
+ *
+ * The one call in this module that works signed OUT — /pricing is public, so a
+ * coach can buy before they have an account. Consequently there is no tenant
+ * here and no team_id: `team_number` and `team_name` are self-reported strings
+ * typed into a form, and the server never joins them to a real team. See the
+ * header of migrations/0007_purchases.sql.
+ *
+ * `amount_cents` is a request, not an instruction. The server clamps it to
+ * [$5, $2000] and the response echoes back what it actually used.
+ */
+export function startPurchase(input: {
+  amount_cents: number;
+  seat_count: number;
+  team_number?: number;
+  team_name?: string;
+  turnstile_token?: string;
+}): Promise<{ url: string; amount_cents: number }> {
+  return send('/api/billing/checkout', 'POST', input);
+}
+
 // --------------------------------------------------------------------------
 // Not built yet. Each returns nothing until its feature lands (COG-014
 // outreach, COG-013 awards, COG-016 calendar), at which point the body becomes
@@ -779,6 +951,48 @@ export function mutateBoard(
   return send(`/api/boards/${boardId}/mutate`, 'POST', {
     ops: Array.isArray(ops) ? ops : [ops],
   });
+}
+
+// ---------------------------------------------------------------- bug reports
+
+export interface BugReportResult {
+  ok: true;
+  /** Quotable in the alpha channel — the dialog shows the first eight. */
+  id: string;
+  /**
+   * False when the mail to us did not go out. The row exists either way, and
+   * the dialog says which happened rather than claiming success.
+   */
+  sent: boolean;
+}
+
+/**
+ * File a bug from inside the app.
+ *
+ * The diagnostics come from lib/diagnostics.ts and are SHOWN TO THE REPORTER
+ * before this is called. Nothing is collected silently, and nothing here is a
+ * screenshot or a copy of the page — see migrations/0008_bug_reports.sql for
+ * what is deliberately absent and why.
+ *
+ * Everything past `body` is advisory: the server whitelists what it stores and
+ * stamps the environment itself, so a client that sends nothing still files a
+ * usable report.
+ */
+export function submitBugReport(input: {
+  body: string;
+  kind?: 'bug' | 'confusing' | 'idea';
+  route?: string;
+  app_build?: string;
+  user_agent?: string;
+  viewport_w?: number;
+  viewport_h?: number;
+  dpr?: number;
+  timezone?: string;
+  language?: string;
+  theme?: string;
+  online?: boolean;
+}): Promise<BugReportResult> {
+  return send<BugReportResult>('/api/bug-reports', 'POST', input);
 }
 
 /**

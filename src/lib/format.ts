@@ -62,6 +62,28 @@ export function formatCount(n: number): string {
   return n.toLocaleString();
 }
 
+/**
+ * Cents → "$312.40". Money is INTEGER cents everywhere (see 0009_finance.sql),
+ * so the one division by 100 lives here — the same single-conversion rule as
+ * the seconds→milliseconds one at the top of this file.
+ */
+export function formatCents(cents: number): string {
+  return (cents / 100).toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+  });
+}
+
+/**
+ * "$14.99" typed into a form → 1499, or null when it does not parse. Accepts
+ * a leading $ and commas, because people paste prices from vendor pages.
+ */
+export function parseDollars(input: string): number | null {
+  const cleaned = input.trim().replace(/^\$/, '').replace(/,/g, '');
+  if (cleaned.length === 0 || !/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  return Math.round(parseFloat(cleaned) * 100);
+}
+
 /** "Nadia Cole" → "NC". Two letters max; initials get crowded past that. */
 export function initials(name: string): string {
   return name
