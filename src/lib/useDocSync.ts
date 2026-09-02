@@ -36,16 +36,16 @@ import { Unauthenticated } from '@/lib/api';
  *   4. A 'conflict' status that is NOT retryable. Retrying a stale write forever
  *      is the failure mode, so it leaves the loop and asks the person instead.
  *
- * SECOND DOCUMENT TYPE. Campaign pitch copy (finance phase 2) is the same
- * problem — one rich-text body, a rev to compare against, students typing on
- * school wifi — so it reuses this rather than forking it. The endpoint and the
- * draft key are now injected through a `DocSyncAdapter`, and the notes adapter
- * is the default so every existing call site reads unchanged. Everything else
- * in here was endpoint-agnostic already.
+ * MORE DOCUMENT TYPES. Campaign pitch copy (phase 2) and sponsor newsletters
+ * (phase 3) are the same problem — one rich-text body, a rev to compare
+ * against, students typing on school wifi — so they reuse this rather than
+ * forking it. The endpoint and the draft key are injected through a
+ * `DocSyncAdapter`, and the notes adapter is the default so every existing call
+ * site reads unchanged. Everything else in here was endpoint-agnostic already.
  *
  * What an adapter MUST honour: its `put` has to reject a stale write with an
  * Error whose message is exactly `stale_content`, because that string is what
- * takes the conflict out of the retry loop below. Both server routes answer
+ * takes the conflict out of the retry loop below. All three server routes answer
  * that code, and `api.send` throws the server's code verbatim.
  */
 
@@ -62,14 +62,14 @@ export interface SyncState {
  * Where a document body is saved, and where its local parachute lives.
  *
  * `put` returns just the new rev: this hook only ever needed that much of the
- * response, and keeping the adapter's contract that narrow is what lets two
+ * response, and keeping the adapter's contract that narrow is what lets three
  * unrelated row shapes share the queue.
  */
 export interface DocSyncAdapter {
   put(id: string, content: string, baseRev?: number): Promise<{ rev: number }>;
   /**
    * Namespaced per document TYPE, not just per id. A note draft handed to a
-   * pitch editor (or the reverse) would be somebody else's writing appearing in
+   * pitch or newsletter editor would be somebody else's writing appearing in
    * their document — the ids are uuids so a collision is unlikely, but the
    * namespaces make it impossible rather than improbable.
    */
@@ -82,6 +82,14 @@ export const noteSyncAdapter: DocSyncAdapter = {
     return { rev: result.doc.rev };
   },
   draftKey: (id) => `coglin:note-draft:${id}`,
+};
+
+export const newsletterSyncAdapter: DocSyncAdapter = {
+  put: async (id, content, baseRev) => {
+    const result = await api.putNewsletterBody(id, content, baseRev);
+    return { rev: result.rev };
+  },
+  draftKey: (id) => `coglin:newsletter-draft:${id}`,
 };
 
 export const pitchSyncAdapter: DocSyncAdapter = {

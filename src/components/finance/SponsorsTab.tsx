@@ -1,9 +1,15 @@
 /**
  * The sponsor half of the Finance section.
  *
- * One campaign at a time, with three stacked sections under it — pipeline,
- * sponsors, pitch and tiers. Stacked rather than nested tabs: tabs inside tabs
- * is two rows of controls on a phone and a guess about which one you are in.
+ * One campaign at a time, with its pipeline, sponsors, tiers and pitch stacked
+ * under it. Stacked rather than nested tabs: tabs inside tabs is two rows of
+ * controls on a phone and a guess about which one you are in.
+ *
+ * Below the campaign, two SEASON-WIDE sections: who gets the team's updates,
+ * and the updates themselves. They sit outside the campaign block and say so,
+ * because a contact list is not a property of one fundraising push — a team
+ * running two campaigns mails the same people about both. The divider is
+ * carrying that distinction, so keep it.
  *
  * COGLIN TRACKS, IT DOES NOT COLLECT. The empty state says so out loud, because
  * a screen with goals and tiers and payments on it could reasonably be mistaken
@@ -12,7 +18,7 @@
  */
 import { useState } from 'react';
 import * as api from '@/lib/api';
-import { useAsync } from '@/lib/useAsync';
+import { useAsync, useLastGood } from '@/lib/useAsync';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +33,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/Skeleton';
 import { parseDollars } from '@/lib/format';
 import { CampaignHeader } from './CampaignHeader';
+import { ContactsSection } from './ContactsSection';
+import { NewslettersSection } from './NewslettersSection';
 import { PitchEditor } from './PitchEditor';
 import { ProspectPipeline } from './ProspectPipeline';
 import { SponsorsList } from './SponsorsList';
@@ -57,6 +65,8 @@ export function SponsorsTab({
 }) {
   const campaigns = useAsync(api.listCampaigns, [reloadKey]);
   const sponsors = useAsync(api.listSponsors, [reloadKey]);
+  const contacts = useAsync(api.listContacts, [reloadKey]);
+  const newsletters = useAsync(api.listNewsletters, [reloadKey]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,7 +75,15 @@ export function SponsorsTab({
   const [goal, setGoal] = useState('');
   const [pending, setPending] = useState(false);
 
-  const list = campaigns.data ?? [];
+  // Last-known values rather than `data ?? []`: every write bumps reloadKey,
+  // which sends useAsync back to `loading` with null data. Rendering the
+  // skeleton on that would unmount this whole subtree after every edit and take
+  // the open dialog, the stage filter and the campaign selector with it. See
+  // useLastGood.
+  const list = useLastGood(campaigns) ?? [];
+  const sponsorList = useLastGood(sponsors) ?? [];
+  const contactList = useLastGood(contacts) ?? [];
+  const newsletterData = useLastGood(newsletters);
   // Selection falls back to the first campaign rather than being seeded in an
   // effect: the list can change under us (create, delete) and an effect would
   // race the refetch.
@@ -94,7 +112,10 @@ export function SponsorsTab({
     }
   }
 
-  if (campaigns.status === 'loading') return <Skeleton className="h-64" />;
+  // Only the genuine cold start gets a skeleton.
+  if (campaigns.status === 'loading' && campaigns.data === null && list.length === 0) {
+    return <Skeleton className="h-64" />;
+  }
 
   if (campaigns.status === 'error') {
     return (
@@ -156,11 +177,40 @@ export function SponsorsTab({
             </Button>
           </div>
         )}
+
+        {/* ---- Season-wide, not campaign-scoped. See the header. ---- */}
+        <div className="border-border space-y-8 border-t pt-8">
+          <section>
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h3 className="u-eyebrow">Update list</h3>
+              <span className="text-muted-foreground text-xs">Season-wide</span>
+            </div>
+            <ContactsSection
+              contacts={contactList}
+              canEdit={canEdit}
+              onChanged={onChanged}
+            />
+          </section>
+
+          <section>
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h3 className="u-eyebrow">Sponsor updates</h3>
+              <span className="text-muted-foreground text-xs">Season-wide</span>
+            </div>
+            <NewslettersSection
+              newsletters={newsletterData?.newsletters ?? []}
+              contacts={contactList}
+              subscriberCount={newsletterData?.subscriber_count ?? 0}
+              canEdit={canEdit}
+              onChanged={onChanged}
+            />
+          </section>
+        </div>
       </div>
     );
   }
 
-  const campaignSponsors = (sponsors.data ?? []).filter(
+  const campaignSponsors = sponsorList.filter(
     (s) => s.campaign_id === campaign.id || s.campaign_id === null,
   );
 
@@ -210,7 +260,7 @@ export function SponsorsTab({
           Sponsors{' '}
           <span className="tabular font-mono">{campaignSponsors.length}</span>
         </h3>
-        {sponsors.status === 'loading' ? (
+        {sponsors.status === 'loading' && sponsorList.length === 0 ? (
           <Skeleton className="h-24" />
         ) : (
           <SponsorsList
@@ -241,6 +291,36 @@ export function SponsorsTab({
         </div>
         <PitchEditor campaignId={campaign.id} canEdit={canEdit} />
       </section>
+
+
+      {/* ---- Season-wide, not campaign-scoped. See the header. ---- */}
+      <div className="border-border space-y-8 border-t pt-8">
+        <section>
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h3 className="u-eyebrow">Update list</h3>
+            <span className="text-muted-foreground text-xs">Season-wide</span>
+          </div>
+          <ContactsSection
+            contacts={contactList}
+            canEdit={canEdit}
+            onChanged={onChanged}
+          />
+        </section>
+
+        <section>
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h3 className="u-eyebrow">Sponsor updates</h3>
+            <span className="text-muted-foreground text-xs">Season-wide</span>
+          </div>
+          <NewslettersSection
+            newsletters={newsletterData?.newsletters ?? []}
+            contacts={contactList}
+            subscriberCount={newsletterData?.subscriber_count ?? 0}
+            canEdit={canEdit}
+            onChanged={onChanged}
+          />
+        </section>
+      </div>
 
       {canEdit && (
         <div className="border-border flex justify-end border-t pt-4">

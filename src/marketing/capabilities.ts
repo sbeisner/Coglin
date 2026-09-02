@@ -215,6 +215,17 @@ export const CAPABILITIES: Capability[] = [
     awards: ['sustain'],
   },
   {
+    key: 'sponsor-updates',
+    job: 'Keeping sponsors in the loop',
+    status: 'now',
+    navTo: '/app/finance',
+    pm: 'no',
+    docs: 'manual',
+    detail:
+      'An opt-in list of the adults who should hear from you — imported from the sponsors who gave you an address — and the season updates your students write for them. Coglin does not send the mail: you copy the text and the addresses out and send from your own account, then record that you did. Nothing here ever claims an update went out when it did not.',
+    awards: ['sustain', 'connect'],
+  },
+  {
     key: 'calendar',
     job: 'The season on one calendar',
     status: 'soon',

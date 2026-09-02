@@ -421,6 +421,73 @@ export interface Sponsor {
   prospect_id?: string | null;
 }
 
+// ------------------------------------------------------------- newsletters
+
+/**
+ * Where a sponsor update stands, mirroring NEWSLETTER_STATUSES in
+ * worker/lib/newsletters.ts.
+ *
+ * 'sent' means a person mailed it themselves and said so. Coglin does not send
+ * these and nothing flips this field on a timer — `scheduled` is a due date.
+ */
+export type NewsletterStatus = 'draft' | 'scheduled' | 'sent';
+
+export const NEWSLETTER_STATUS_LABELS: Record<NewsletterStatus, string> = {
+  draft: 'Draft',
+  scheduled: 'Scheduled',
+  sent: 'Sent',
+};
+
+export interface Newsletter {
+  id: string;
+  title: string;
+  body_text: string;
+  rev: number;
+  status: NewsletterStatus;
+  /** When the team INTENDS to send. Never acted on automatically. */
+  scheduled_for: number | null;
+  sent_at: number | null;
+  sent_by: string | null;
+  /** Subscribed contacts at the moment it was marked sent. */
+  recipient_count: number | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: number;
+  updated_at: number;
+  /** Present only on the single-newsletter read. */
+  body?: string;
+}
+
+/**
+ * Somebody who may receive the team's updates.
+ *
+ * An adult business or community contact, entered deliberately — the same
+ * category as a prospect's contact details and never a student's. `subscribed`
+ * is derived server-side-style on the client from the two timestamps: an
+ * opt-in newer than the most recent opt-out.
+ */
+export interface ExternalContact {
+  id: string;
+  org_name: string | null;
+  contact_name: string | null;
+  email: string;
+  note: string | null;
+  subscribed_at: number | null;
+  subscribed_by: string | null;
+  unsubscribed_at: number | null;
+  sponsor_id: string | null;
+  created_by: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+/** Mirrors isSubscribed in worker/lib/newsletters.ts. */
+export function isSubscribed(contact: ExternalContact): boolean {
+  if (contact.subscribed_at === null) return false;
+  if (contact.unsubscribed_at === null) return true;
+  return contact.subscribed_at > contact.unsubscribed_at;
+}
+
 export interface OutreachEvent {
   id: string;
   team_id: string;

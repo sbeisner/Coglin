@@ -107,6 +107,7 @@ for (const t of [
   // Prospects point at sponsors, sponsors point at campaigns, and ledger
   // lines point at sponsors — so these come before `transactions`, which
   // comes before the tenant rows below.
+  'newsletters', 'external_contacts',
   'sponsor_prospects', 'sponsors', 'sponsorship_tiers', 'sponsorship_campaigns',
   'transactions', 'members', 'seasons',
 ]) out(`DELETE FROM ${t} WHERE team_id = ${q(TEAM)};`);
@@ -432,6 +433,57 @@ for (const [id, org, contact, email, phone, url, note, stage, pledged, tierId, s
     VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(CAMPAIGN)}, ${q(org)}, ${q(contact)}, ${q(email)}, ${q(phone)}, ${q(url)}, ${q(note)},
       ${q(stage)}, ${pledged ? n(pledged) : 'NULL'}, ${q(tierId)}, 'manual', 'm-stu4', ${n(NOW - daysAgo * DAY)}, ${q(sponsorId)},
       'm-stu4', ${n(NOW - (daysAgo + 8) * DAY)}, ${n(NOW - daysAgo * DAY)});`);
+}
+
+// ---------------------------------------------------- updates and contacts
+// The list is the two sponsors who gave an address plus one community
+// contact, and one of them has opted out — the state the toggle exists to
+// show. Two updates: one actually sent in the autumn, one being written now
+// and aimed at a date, so a screenshot carries both halves of the story.
+const CONTACTS = [
+  // [id, org, contact, email, sponsorId, subscribedDaysAgo, unsubDaysAgo]
+  ['ec-1', 'Harbor Machine Works', 'Dana Reyes', 'dana@harbormachine.example', 'sp-1', 94, null],
+  ['ec-2', 'Riverside Dental', 'Dr. Amara Osei', 'front.desk@riversidedental.example', 'sp-2', 58, null],
+  ['ec-3', 'Chesapeake High Boosters', 'Val Whitfield', 'boosters@cheshigh.example', null, 80, null],
+  ['ec-4', 'Kettle & Cup', 'Priya Raman', 'hello@kettleandcup.example', null, 40, 12],
+];
+for (const [id, org, contact, email, sponsorId, sub, unsub] of CONTACTS) {
+  out(`INSERT INTO external_contacts (id, team_id, season_id, org_name, contact_name, email, subscribed_at, subscribed_by, unsubscribed_at, sponsor_id, created_by, created_at, updated_at)
+    VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(org)}, ${q(contact)}, ${q(email)},
+      ${n(NOW - sub * DAY)}, 'm-stu4', ${unsub ? n(NOW - unsub * DAY) : 'NULL'},
+      ${q(sponsorId)}, 'm-stu4', ${n(NOW - sub * DAY)}, ${n(NOW - (unsub ?? sub) * DAY)});`);
+}
+
+const UPDATES = [
+  // [id, title, paragraphs, status, scheduledDaysAgo, sentDaysAgo, recipients]
+  ['nl-1', 'What your sponsorship built this autumn',
+    [
+      'Thank you for backing the Cog Goblins this season. Since September we have built a complete drivetrain, taught two rookie teams to wire a control hub, and run a robotics table at the Dundalk library that reached about ninety kids and their parents.',
+      'Your money went to a REV starter kit restock, this season FIRST registration, and the polycarbonate for our intake. We have receipts for all of it in our books, and we are on track against the season budget.',
+    ],
+    'sent', null, 42, 3],
+  ['nl-2', 'Heading into qualifiers',
+    [
+      'The robot has a name now. It is Grendel, it weighs 39 pounds, and it can hang from the rung for the whole endgame.',
+    ],
+    'scheduled', -14, null, null],
+];
+for (const [id, title, paragraphs, status, sched, sent, recipients] of UPDATES) {
+  const doc = JSON.stringify({
+    type: 'doc',
+    content: paragraphs.map((text) => ({
+      type: 'paragraph',
+      content: [{ type: 'text', text }],
+    })),
+  });
+  out(`INSERT INTO newsletters (id, team_id, season_id, title, body, body_text, rev, status, scheduled_for, sent_at, sent_by, recipient_count, created_by, updated_by, created_at, updated_at)
+    VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(title)}, ${q(doc)}, ${q(paragraphs.join(' '))},
+      ${n(paragraphs.length + 1)}, ${q(status)},
+      ${sched === null ? 'NULL' : n(NOW - sched * DAY)},
+      ${sent === null ? 'NULL' : n(NOW - sent * DAY)},
+      ${sent === null ? 'NULL' : "'m-stu4'"},
+      ${recipients === null ? 'NULL' : n(recipients)},
+      'm-stu4', 'm-stu4', ${n(NOW - (sent ?? 20) * DAY)}, ${n(NOW - (sent ?? 2) * DAY)});`);
 }
 
 const sql = [

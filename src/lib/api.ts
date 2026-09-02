@@ -53,9 +53,12 @@ import type {
   MeetingKind,
   MeetingSeries,
   FinanceSummary,
+  ExternalContact,
   MeetingStatus,
   MeetingSummary,
   Member,
+  Newsletter,
+  NewsletterStatus,
   OutreachEvent,
   PartOrder,
   PortfolioCandidate,
@@ -1106,6 +1109,130 @@ export function recordSponsorPayment(
 /** Refused while ledger lines point at them (`sponsor_has_payments`). */
 export function deleteSponsor(id: string): Promise<{ ok: true }> {
   return send(`/api/finance/sponsors/${id}`, 'DELETE');
+}
+
+// ------------------------------------------------------- sponsor updates
+
+/**
+ * The contact list, and the updates written for it.
+ *
+ * NOTHING HERE SENDS MAIL. `markNewsletterSent` records that a person mailed it
+ * themselves; there is no delivery in Coglin and no job that flips a status.
+ * See migrations/0011_newsletters.sql.
+ */
+export function listContacts(): Promise<ExternalContact[]> {
+  return get<{ contacts: ExternalContact[] }>('/api/contacts').then((r) => r.contacts);
+}
+
+export function createContact(input: {
+  email: string;
+  org_name?: string | null;
+  contact_name?: string | null;
+  note?: string | null;
+  subscribed?: boolean;
+}): Promise<ExternalContact> {
+  return send<{ contact: ExternalContact }>('/api/contacts', 'POST', input).then(
+    (r) => r.contact,
+  );
+}
+
+export function updateContact(
+  id: string,
+  patch: {
+    email?: string;
+    org_name?: string | null;
+    contact_name?: string | null;
+    note?: string | null;
+  },
+): Promise<ExternalContact> {
+  return send<{ contact: ExternalContact }>(`/api/contacts/${id}`, 'PATCH', patch).then(
+    (r) => r.contact,
+  );
+}
+
+/** Opting out is remembered, so a later import cannot undo it. */
+export function setContactSubscribed(
+  id: string,
+  subscribed: boolean,
+): Promise<ExternalContact> {
+  return send<{ contact: ExternalContact }>(
+    `/api/contacts/${id}/subscription`,
+    'POST',
+    { subscribed },
+  ).then((r) => r.contact);
+}
+
+export function deleteContact(id: string): Promise<{ ok: true }> {
+  return send(`/api/contacts/${id}`, 'DELETE');
+}
+
+/** Idempotent by address, and it never re-adds somebody who unsubscribed. */
+export function importSponsorContacts(): Promise<{
+  imported: number;
+  skipped: number;
+}> {
+  return send('/api/contacts/import-sponsors', 'POST');
+}
+
+export function listNewsletters(): Promise<{
+  newsletters: Newsletter[];
+  subscriber_count: number;
+}> {
+  return get('/api/newsletters');
+}
+
+/** The only read carrying the body. */
+export function getNewsletter(id: string): Promise<Newsletter> {
+  return get<{ newsletter: Newsletter }>(`/api/newsletters/${id}`).then(
+    (r) => r.newsletter,
+  );
+}
+
+export function createNewsletter(input: { title: string }): Promise<Newsletter> {
+  return send<{ newsletter: Newsletter }>('/api/newsletters', 'POST', input).then(
+    (r) => r.newsletter,
+  );
+}
+
+/** Title, schedule, and the draft/scheduled flip. 'sent' is not settable here. */
+export function updateNewsletter(
+  id: string,
+  patch: {
+    title?: string;
+    scheduled_for?: number | null;
+    status?: Exclude<NewsletterStatus, 'sent'>;
+  },
+): Promise<Newsletter> {
+  return send<{ newsletter: Newsletter }>(`/api/newsletters/${id}`, 'PATCH', patch).then(
+    (r) => r.newsletter,
+  );
+}
+
+/** Compare-and-swap, feeding `newsletterSyncAdapter` in useDocSync.ts. */
+export function putNewsletterBody(
+  id: string,
+  content: string,
+  baseRev?: number,
+): Promise<{ rev: number; unchanged?: boolean }> {
+  return send<{ newsletter: Newsletter; unchanged?: boolean }>(
+    `/api/newsletters/${id}/body`,
+    'PUT',
+    { content, base_rev: baseRev },
+  ).then((r) => ({ rev: r.newsletter.rev, unchanged: r.unchanged }));
+}
+
+/**
+ * "I have sent this." Records the team's own assertion, with their name on it,
+ * and snapshots how many subscribed contacts existed at that moment.
+ */
+export function markNewsletterSent(id: string): Promise<Newsletter> {
+  return send<{ newsletter: Newsletter }>(`/api/newsletters/${id}/sent`, 'POST').then(
+    (r) => r.newsletter,
+  );
+}
+
+export function deleteNewsletter(id: string): Promise<{ ok: true }> {
+  return send(`/api/newsletters/${id}`, 'DELETE');
 }
 
 // ------------------------------------------------------------ season purchase
