@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@/lib/api';
-import type { NoteDoc } from '@/types';
 import { Unauthenticated } from '@/lib/api';
 
 /**
@@ -36,6 +35,18 @@ import { Unauthenticated } from '@/lib/api';
  *      SECOND save conflict with the first, which is the likeliest bug here.
  *   4. A 'conflict' status that is NOT retryable. Retrying a stale write forever
  *      is the failure mode, so it leaves the loop and asks the person instead.
+ *
+ * MORE DOCUMENT TYPES. Campaign pitch copy (phase 2) and sponsor newsletters
+ * (phase 3) are the same problem — one rich-text body, a rev to compare
+ * against, students typing on school wifi — so they reuse this rather than
+ * forking it. The endpoint and the draft key are injected through a
+ * `DocSyncAdapter`, and the notes adapter is the default so every existing call
+ * site reads unchanged. Everything else in here was endpoint-agnostic already.
+ *
+ * What an adapter MUST honour: its `put` has to reject a stale write with an
+ * Error whose message is exactly `stale_content`, because that string is what
+ * takes the conflict out of the retry loop below. All three server routes answer
+ * that code, and `api.send` throws the server's code verbatim.
  */
 
 export type SyncStatus = 'idle' | 'saving' | 'saved' | 'failed' | 'conflict';
@@ -43,11 +54,51 @@ export type SyncStatus = 'idle' | 'saving' | 'saved' | 'failed' | 'conflict';
 export interface SyncState {
   status: SyncStatus;
   savedAt: number | null;
-  /** The server's copy, when a save lost a race. Only set on 'conflict'. */
-  conflict: NoteDoc | null;
   /** Set while retrying, so the UI can say "not saved" and mean it. */
   failedSince: number | null;
 }
+
+/**
+ * Where a document body is saved, and where its local parachute lives.
+ *
+ * `put` returns just the new rev: this hook only ever needed that much of the
+ * response, and keeping the adapter's contract that narrow is what lets three
+ * unrelated row shapes share the queue.
+ */
+export interface DocSyncAdapter {
+  put(id: string, content: string, baseRev?: number): Promise<{ rev: number }>;
+  /**
+   * Namespaced per document TYPE, not just per id. A note draft handed to a
+   * pitch or newsletter editor would be somebody else's writing appearing in
+   * their document — the ids are uuids so a collision is unlikely, but the
+   * namespaces make it impossible rather than improbable.
+   */
+  draftKey(id: string): string;
+}
+
+export const noteSyncAdapter: DocSyncAdapter = {
+  put: async (id, content, baseRev) => {
+    const result = await api.putDocContent(id, content, baseRev);
+    return { rev: result.doc.rev };
+  },
+  draftKey: (id) => `coglin:note-draft:${id}`,
+};
+
+export const newsletterSyncAdapter: DocSyncAdapter = {
+  put: async (id, content, baseRev) => {
+    const result = await api.putNewsletterBody(id, content, baseRev);
+    return { rev: result.rev };
+  },
+  draftKey: (id) => `coglin:newsletter-draft:${id}`,
+};
+
+export const pitchSyncAdapter: DocSyncAdapter = {
+  put: async (id, content, baseRev) => {
+    const result = await api.putCampaignPitch(id, content, baseRev);
+    return { rev: result.rev };
+  },
+  draftKey: (id) => `coglin:pitch-draft:${id}`,
+};
 
 /** Text keystrokes wait for a pause. Everything structural goes immediately. */
 const TEXT_DEBOUNCE_MS = 600;
@@ -55,7 +106,6 @@ const TEXT_DEBOUNCE_MS = 600;
 const MAX_WAIT_MS = 5000;
 const RETRY_MS = [1000, 2000, 4000, 8000, 15000];
 
-const draftKey = (docId: string) => `coglin:note-draft:${docId}`;
 /** Old drafts are noise, and localStorage is a small shared budget. */
 const DRAFT_TTL_MS = 7 * 24 * 3600 * 1000;
 
@@ -74,13 +124,16 @@ interface Draft {
  * The draft is written before any request is attempted, so there is nothing to
  * race.
  */
-export function readDraft(docId: string): Draft | null {
+export function readDraft(
+  docId: string,
+  adapter: DocSyncAdapter = noteSyncAdapter,
+): Draft | null {
   try {
-    const raw = localStorage.getItem(draftKey(docId));
+    const raw = localStorage.getItem(adapter.draftKey(docId));
     if (!raw) return null;
     const draft = JSON.parse(raw) as Draft;
     if (Date.now() - draft.savedAt > DRAFT_TTL_MS) {
-      localStorage.removeItem(draftKey(docId));
+      localStorage.removeItem(adapter.draftKey(docId));
       return null;
     }
     return draft;
@@ -89,15 +142,23 @@ export function readDraft(docId: string): Draft | null {
   }
 }
 
-export function clearDraft(docId: string): void {
+export function clearDraft(
+  docId: string,
+  adapter: DocSyncAdapter = noteSyncAdapter,
+): void {
   try {
-    localStorage.removeItem(draftKey(docId));
+    localStorage.removeItem(adapter.draftKey(docId));
   } catch {
     // A full or disabled localStorage must never break note-taking.
   }
 }
 
-function writeDraft(docId: string, content: string, rev: number): void {
+function writeDraft(
+  docId: string,
+  content: string,
+  rev: number,
+  adapter: DocSyncAdapter,
+): void {
   try {
     // Image bytes are NEVER stored here. Two phone photos as data URLs blow the
     // 5MB quota, and then every subsequent draft write throws — turning the
@@ -105,7 +166,7 @@ function writeDraft(docId: string, content: string, rev: number): void {
     // stores a media id rather than base64 for exactly this reason, and
     // allowBase64 is off so it cannot start.
     localStorage.setItem(
-      draftKey(docId),
+      adapter.draftKey(docId),
       JSON.stringify({ savedAt: Date.now(), content, rev } satisfies Draft),
     );
   } catch {
@@ -114,11 +175,14 @@ function writeDraft(docId: string, content: string, rev: number): void {
   }
 }
 
-export function useDocSync(docId: string, canWrite: boolean) {
+export function useDocSync(
+  docId: string,
+  canWrite: boolean,
+  adapter: DocSyncAdapter = noteSyncAdapter,
+) {
   const [state, setState] = useState<SyncState>({
     status: 'idle',
     savedAt: null,
-    conflict: null,
     failedSince: null,
   });
 
@@ -151,23 +215,22 @@ export function useDocSync(docId: string, canWrite: boolean) {
     setState((s) => ({ ...s, status: 'saving' }));
     // Written here rather than on every keystroke, and still before the request
     // — so the "nothing to race" guarantee holds.
-    writeDraft(docId, content, baseRev.current ?? 0);
+    writeDraft(docId, content, baseRev.current ?? 0, adapter);
 
     try {
-      const result = await api.putDocContent(
+      const result = await adapter.put(
         docId,
         content,
         baseRev.current ?? undefined,
       );
       // Adopting this is not optional: without it the next save carries a stale
       // base and conflicts with our own previous write.
-      baseRev.current = result.doc.rev;
+      baseRev.current = result.rev;
       attempt.current = 0;
-      clearDraft(docId);
+      clearDraft(docId, adapter);
       setState({
         status: 'saved',
         savedAt: Date.now(),
-        conflict: null,
         failedSince: null,
       });
     } catch (error) {
@@ -196,7 +259,6 @@ export function useDocSync(docId: string, canWrite: boolean) {
         setState((s) => ({
           status: 'conflict',
           savedAt: s.savedAt,
-          conflict: null,
           failedSince: s.failedSince ?? Date.now(),
         }));
         inFlight.current = false;
@@ -208,7 +270,6 @@ export function useDocSync(docId: string, canWrite: boolean) {
       setState((s) => ({
         status: 'failed',
         savedAt: s.savedAt,
-        conflict: null,
         failedSince: s.failedSince ?? Date.now(),
       }));
       const wait = RETRY_MS[Math.min(attempt.current, RETRY_MS.length - 1)];
@@ -218,7 +279,7 @@ export function useDocSync(docId: string, canWrite: boolean) {
     } finally {
       inFlight.current = false;
     }
-  }, [docId, canWrite]);
+  }, [docId, canWrite, adapter]);
 
   /**
    * Hand the current document to the queue.
@@ -267,24 +328,26 @@ export function useDocSync(docId: string, canWrite: boolean) {
   const keepMine = useCallback(
     (serverRev: number) => {
       baseRev.current = serverRev;
-      setState((s) => ({ ...s, status: 'saving', conflict: null }));
+      setState((s) => ({ ...s, status: 'saving' }));
       void flush();
     },
     [flush],
   );
 
   /** Drop our pending work in favour of the server's copy. */
-  const discardMine = useCallback((serverRev: number) => {
-    pending.current = null;
-    baseRev.current = serverRev;
-    clearDraft(docId);
-    setState({
-      status: 'saved',
-      savedAt: Date.now(),
-      conflict: null,
-      failedSince: null,
-    });
-  }, [docId]);
+  const discardMine = useCallback(
+    (serverRev: number) => {
+      pending.current = null;
+      baseRev.current = serverRev;
+      clearDraft(docId, adapter);
+      setState({
+        status: 'saved',
+        savedAt: Date.now(),
+        failedSince: null,
+      });
+    },
+    [docId, adapter],
+  );
 
   useEffect(() => {
     const onHidden = () => {

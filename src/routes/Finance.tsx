@@ -15,6 +15,7 @@ import { StatTile } from '@/components/StatTile';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LedgerTab } from '@/components/finance/LedgerTab';
 import { OrdersTab } from '@/components/finance/OrdersTab';
+import { SponsorsTab } from '@/components/finance/SponsorsTab';
 import { formatCents } from '@/lib/format';
 
 export default function Finance() {
@@ -62,6 +63,7 @@ export default function Finance() {
           <TabsList>
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
             <TabsTrigger value="orders">Part orders</TabsTrigger>
+            <TabsTrigger value="sponsors">Sponsors</TabsTrigger>
           </TabsList>
           <TabsContent value="ledger" className="mt-4">
             <LedgerTab canManage={canManage} reloadKey={reloadKey} onChanged={reload} />
@@ -71,6 +73,16 @@ export default function Finance() {
               canSubmit={canSubmit}
               canApprove={canApprove}
               canManage={canManage}
+              reloadKey={reloadKey}
+              onChanged={reload}
+            />
+          </TabsContent>
+          <TabsContent value="sponsors" className="mt-4">
+            {/* Students own the campaign; only adults record that money
+                arrived, because that writes the ledger. */}
+            <SponsorsTab
+              canEdit={canSubmit}
+              canRecordPayment={canManage}
               reloadKey={reloadKey}
               onChanged={reload}
             />

@@ -10,8 +10,10 @@ import { media, mediaFiles } from './routes/media';
 import { meetings } from './routes/meetings';
 import { meetingNotes } from './routes/notes';
 import { docs } from './routes/docs';
+import { newsletters } from './routes/newsletters';
 import { records } from './routes/records';
 import { series } from './routes/series';
+import { sponsorship } from './routes/sponsorship';
 import { billing } from './routes/billing';
 import { scheduled } from './backup';
 import type { AppEnv } from './lib/tenancy';
@@ -85,11 +87,19 @@ app.route('/api/series', series);
 app.route('/api/notes', docs);
 app.route('/api/portfolio', candidates);
 app.route('/api/finance', finance);
+// The sponsor half of the finance section, sharing the prefix so the client
+// keeps one /api/finance surface. Mounted after `finance` — the two declare
+// disjoint paths, and Hono tries them in mount order.
+app.route('/api/finance', sponsorship);
 app.route('/api/media', media);
 // Both declare full paths ('/boards', '/meetings/:id/attendance') rather than a
 // prefix, so they mount at /api alongside `team`.
 app.route('/api', boards);
 app.route('/api', records);
+// Declares full paths ('/newsletters', '/contacts') like boards and records,
+// so it mounts at /api alongside them — and before `team`, whose bare paths
+// would otherwise shadow siblings.
+app.route('/api', newsletters);
 // Mounted last of the /api routes because `team` declares bare paths ('/team',
 // '/members') rather than a prefix, so it would otherwise shadow siblings.
 app.route('/api', team);

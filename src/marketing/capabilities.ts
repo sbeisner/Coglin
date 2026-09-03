@@ -206,13 +206,24 @@ export const CAPABILITIES: Capability[] = [
   {
     key: 'sponsors',
     job: 'Sponsors and campaigns',
-    status: 'soon',
+    status: 'now',
     navTo: '/app/finance',
     pm: 'no',
     docs: 'manual',
     detail:
-      'Sponsor tiers, pitch copy, a prospect pipeline and whether anyone has thanked them yet. Lands in the Finance section next to the ledger their cheques already appear in.',
+      'A campaign with a goal and tiers, the pitch your students write themselves, and a pipeline of local businesses from "worth asking" to "said yes". A sponsor who commits lands next to the ledger their payments book into, so promised and received are never the same number. Thank-you status included, because that is the part teams forget. Coglin tracks the money — it does not collect it.',
     awards: ['sustain'],
+  },
+  {
+    key: 'sponsor-updates',
+    job: 'Keeping sponsors in the loop',
+    status: 'now',
+    navTo: '/app/finance',
+    pm: 'no',
+    docs: 'manual',
+    detail:
+      'An opt-in list of the adults who should hear from you — imported from the sponsors who gave you an address — and the season updates your students write for them. Coglin does not send the mail: you copy the text and the addresses out and send from your own account, then record that you did. Nothing here ever claims an update went out when it did not.',
+    awards: ['sustain', 'connect'],
   },
   {
     key: 'calendar',

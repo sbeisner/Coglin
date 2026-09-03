@@ -104,6 +104,11 @@ for (const t of [
   'meeting_attendance', 'meeting_agenda_items', 'meeting_action_items',
   'portfolio_candidates', 'note_docs', 'meetings', 'meeting_series',
   'tasks', 'boards', 'portfolio_pages', 'media', 'part_orders',
+  // Prospects point at sponsors, sponsors point at campaigns, and ledger
+  // lines point at sponsors — so these come before `transactions`, which
+  // comes before the tenant rows below.
+  'newsletters', 'external_contacts',
+  'sponsor_prospects', 'sponsors', 'sponsorship_tiers', 'sponsorship_campaigns',
   'transactions', 'members', 'seasons',
 ]) out(`DELETE FROM ${t} WHERE team_id = ${q(TEAM)};`);
 out(`DELETE FROM teams WHERE id = ${q(TEAM)};`);
@@ -337,6 +342,148 @@ for (const [id, item, desc, url, vendor, qty, cents, status, requester, x] of OR
       ${q(x.decidedBy ?? null)}, ${x.decided ? n(NOW - x.decided * DAY) : 'NULL'}, ${q(x.note ?? null)},
       ${q(x.orderedBy ?? null)}, ${x.ordered ? n(NOW - x.ordered * DAY) : 'NULL'}, ${q(x.transaction ?? null)},
       ${n(NOW - 16 * DAY)}, ${n(NOW - 5 * DAY)});`);
+}
+
+// ------------------------------------------------------------- sponsorship
+// One campaign mid-season: two sponsors already in (the two 'sponsorship'
+// income lines above are their payments), one prospect at each interesting
+// stage, and one sponsor deliberately NOT thanked — the state the screen
+// exists to make visible.
+const CAMPAIGN = 'sc-1';
+out(`INSERT INTO sponsorship_campaigns (id, team_id, season_id, name, goal_cents, pitch, pitch_text, rev, created_by, updated_by, created_at, updated_at)
+  VALUES (${q(CAMPAIGN)}, ${q(TEAM)}, ${q(SEASON)}, ${q('2026 season sponsorship drive')}, 250000,
+    ${q(JSON.stringify({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'The Cog Goblins are fifteen students from Chesapeake High building a competition robot from September to April. Last season we reached 340 people at seven community events and took a rookie team through their first qualifier.',
+            },
+          ],
+        },
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'Sponsorship pays for parts, registration and travel — and it puts your name in front of every family at every event we attend. We will send you a season report in May showing exactly what your support built.',
+            },
+          ],
+        },
+      ],
+    }))},
+    ${q('The Cog Goblins are fifteen students from Chesapeake High building a competition robot from September to April. Last season we reached 340 people at seven community events and took a rookie team through their first qualifier. Sponsorship pays for parts, registration and travel — and it puts your name in front of every family at every event we attend. We will send you a season report in May showing exactly what your support built.')},
+    3, 'm-stu4', 'm-stu4', ${n(NOW - 100 * DAY)}, ${n(NOW - 40 * DAY)});`);
+
+const TIERS = [
+  // [id, name, cents, benefits, position]
+  ['st-1', 'Bronze', 10000, 'Name on the team banner and the season report.', 1024],
+  ['st-2', 'Silver', 25000, 'Banner, season report, and your logo on the robot cart.', 2048],
+  ['st-3', 'Gold', 75000, 'All of the above, your logo on the robot itself, and a visit from the team to your business.', 3072],
+];
+for (const [id, name, cents, benefits, position] of TIERS) {
+  out(`INSERT INTO sponsorship_tiers (id, team_id, campaign_id, name, amount_cents, benefits, position, created_at, updated_at)
+    VALUES (${q(id)}, ${q(TEAM)}, ${q(CAMPAIGN)}, ${q(name)}, ${n(cents)}, ${q(benefits)}, ${n(position)}, ${n(NOW - 99 * DAY)}, ${n(NOW - 99 * DAY)});`);
+}
+
+// The two who said yes. Harbor Machine paid in full and has been thanked;
+// Riverside paid in full and has NOT — that is the row a coach should notice.
+const SPONSORS = [
+  // [id, name, tierId, tierName, cents, thankedDaysAgo, thankedBy]
+  ['sp-1', 'Harbor Machine Works', 'st-3', 'Gold', 75000, 90, 'm-stu4'],
+  ['sp-2', 'Riverside Dental', 'st-2', 'Silver', 25000, null, null],
+];
+for (const [id, name, tierId, tierName, cents, thanked, thankedBy] of SPONSORS) {
+  out(`INSERT INTO sponsors (id, team_id, season_id, campaign_id, name, tier_id, tier_name, amount_cents, thanked_at, thanked_by, created_by, created_at, updated_at)
+    VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(CAMPAIGN)}, ${q(name)}, ${q(tierId)}, ${q(tierName)}, ${n(cents)},
+      ${thanked ? n(NOW - thanked * DAY) : 'NULL'}, ${q(thankedBy)}, 'm-stu4', ${n(NOW - 96 * DAY)}, ${n(NOW - 96 * DAY)});`);
+}
+
+// Point the two sponsorship income lines at them, so pledged and paid agree
+// and the ledger rows read as "from sponsor X".
+out(`UPDATE transactions SET sponsor_id = 'sp-1' WHERE id = 'tx-1' AND team_id = ${q(TEAM)};`);
+out(`UPDATE transactions SET sponsor_id = 'sp-2' WHERE id = 'tx-7' AND team_id = ${q(TEAM)};`);
+
+const PROSPECTS = [
+  // [id, org, contact, email, phone, url, note, stage, pledged, tierId, sponsorId, daysAgo]
+  ['pr-1', 'Harbor Machine Works', 'Dana Reyes', 'dana@harbormachine.example', '410-555-0134',
+    'https://harbormachine.example', 'Second season backing us. Ask about the mill donation too.',
+    'committed', 75000, 'st-3', 'sp-1', 96],
+  ['pr-2', 'Riverside Dental', 'Dr. Amara Osei', 'front.desk@riversidedental.example', null,
+    null, 'Mia’s orthodontist. Said yes on the phone in ten minutes.',
+    'committed', 25000, 'st-2', 'sp-2', 60],
+  ['pr-3', 'Bayside Hardware', 'Tom Feldman', null, '410-555-0199', 'https://baysidehardware.example',
+    'Sponsors the football team already. Wants to see the robot first — bring it to the store.',
+    'pitched', 25000, 'st-2', null, 24],
+  ['pr-4', 'Kettle & Cup', 'Priya Raman', 'hello@kettleandcup.example', null, null,
+    'Emailed the pitch on Tuesday. Follow up next week if nothing.',
+    'contacted', 10000, 'st-1', null, 11],
+  ['pr-5', 'Delmarva Auto Body', null, null, null, 'https://delmarvaauto.example',
+    'Parent works there. Nobody has called yet.',
+    'researching', null, null, null, 6],
+  ['pr-6', 'Chesapeake Credit Union', 'Marcus Webb', 'community@chesbank.example', null, null,
+    'Grant cycle closed for this year. Try again in August.',
+    'declined', null, null, null, 30],
+];
+for (const [id, org, contact, email, phone, url, note, stage, pledged, tierId, sponsorId, daysAgo] of PROSPECTS) {
+  out(`INSERT INTO sponsor_prospects (id, team_id, season_id, campaign_id, org_name, contact_name, contact_email, contact_phone, url, note, stage, pledged_cents, tier_id, source, stage_changed_by, stage_changed_at, sponsor_id, created_by, created_at, updated_at)
+    VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(CAMPAIGN)}, ${q(org)}, ${q(contact)}, ${q(email)}, ${q(phone)}, ${q(url)}, ${q(note)},
+      ${q(stage)}, ${pledged ? n(pledged) : 'NULL'}, ${q(tierId)}, 'manual', 'm-stu4', ${n(NOW - daysAgo * DAY)}, ${q(sponsorId)},
+      'm-stu4', ${n(NOW - (daysAgo + 8) * DAY)}, ${n(NOW - daysAgo * DAY)});`);
+}
+
+// ---------------------------------------------------- updates and contacts
+// The list is the two sponsors who gave an address plus one community
+// contact, and one of them has opted out — the state the toggle exists to
+// show. Two updates: one actually sent in the autumn, one being written now
+// and aimed at a date, so a screenshot carries both halves of the story.
+const CONTACTS = [
+  // [id, org, contact, email, sponsorId, subscribedDaysAgo, unsubDaysAgo]
+  ['ec-1', 'Harbor Machine Works', 'Dana Reyes', 'dana@harbormachine.example', 'sp-1', 94, null],
+  ['ec-2', 'Riverside Dental', 'Dr. Amara Osei', 'front.desk@riversidedental.example', 'sp-2', 58, null],
+  ['ec-3', 'Chesapeake High Boosters', 'Val Whitfield', 'boosters@cheshigh.example', null, 80, null],
+  ['ec-4', 'Kettle & Cup', 'Priya Raman', 'hello@kettleandcup.example', null, 40, 12],
+];
+for (const [id, org, contact, email, sponsorId, sub, unsub] of CONTACTS) {
+  out(`INSERT INTO external_contacts (id, team_id, season_id, org_name, contact_name, email, subscribed_at, subscribed_by, unsubscribed_at, sponsor_id, created_by, created_at, updated_at)
+    VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(org)}, ${q(contact)}, ${q(email)},
+      ${n(NOW - sub * DAY)}, 'm-stu4', ${unsub ? n(NOW - unsub * DAY) : 'NULL'},
+      ${q(sponsorId)}, 'm-stu4', ${n(NOW - sub * DAY)}, ${n(NOW - (unsub ?? sub) * DAY)});`);
+}
+
+const UPDATES = [
+  // [id, title, paragraphs, status, scheduledDaysAgo, sentDaysAgo, recipients]
+  ['nl-1', 'What your sponsorship built this autumn',
+    [
+      'Thank you for backing the Cog Goblins this season. Since September we have built a complete drivetrain, taught two rookie teams to wire a control hub, and run a robotics table at the Dundalk library that reached about ninety kids and their parents.',
+      'Your money went to a REV starter kit restock, this season FIRST registration, and the polycarbonate for our intake. We have receipts for all of it in our books, and we are on track against the season budget.',
+    ],
+    'sent', null, 42, 3],
+  ['nl-2', 'Heading into qualifiers',
+    [
+      'The robot has a name now. It is Grendel, it weighs 39 pounds, and it can hang from the rung for the whole endgame.',
+    ],
+    'scheduled', -14, null, null],
+];
+for (const [id, title, paragraphs, status, sched, sent, recipients] of UPDATES) {
+  const doc = JSON.stringify({
+    type: 'doc',
+    content: paragraphs.map((text) => ({
+      type: 'paragraph',
+      content: [{ type: 'text', text }],
+    })),
+  });
+  out(`INSERT INTO newsletters (id, team_id, season_id, title, body, body_text, rev, status, scheduled_for, sent_at, sent_by, recipient_count, created_by, updated_by, created_at, updated_at)
+    VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(title)}, ${q(doc)}, ${q(paragraphs.join(' '))},
+      ${n(paragraphs.length + 1)}, ${q(status)},
+      ${sched === null ? 'NULL' : n(NOW - sched * DAY)},
+      ${sent === null ? 'NULL' : n(NOW - sent * DAY)},
+      ${sent === null ? 'NULL' : "'m-stu4'"},
+      ${recipients === null ? 'NULL' : n(recipients)},
+      'm-stu4', 'm-stu4', ${n(NOW - (sent ?? 20) * DAY)}, ${n(NOW - (sent ?? 2) * DAY)});`);
 }
 
 const sql = [
