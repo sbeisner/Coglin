@@ -53,6 +53,8 @@ import type {
   MeetingKind,
   MeetingSeries,
   FinanceSummary,
+  Fund,
+  FundsResponse,
   ExternalContact,
   MeetingStatus,
   MeetingSummary,
@@ -773,6 +775,8 @@ export function createTransaction(input: {
   note?: string | null;
   amount_cents: number;
   occurred_at: number;
+  /** Omit for the team's default pot; explicit null for unassigned. */
+  fund_id?: string | null;
 }): Promise<Transaction> {
   return send<{ transaction: Transaction }>(
     '/api/finance/transactions',
@@ -790,6 +794,8 @@ export function updateTransaction(
     note?: string | null;
     amount_cents?: number;
     occurred_at?: number;
+    /** Re-filing a line into another pot; null moves it to unassigned. */
+    fund_id?: string | null;
   },
 ): Promise<Transaction> {
   return send<{ transaction: Transaction }>(
@@ -890,6 +896,61 @@ export function setPurchaseApprover(
   return send(`/api/members/${memberId}`, 'PATCH', {
     is_purchase_approver: isApprover,
   });
+}
+
+// --------------------------------------------------------------------- funds
+
+/**
+ * The team's pots, each with what is in it.
+ *
+ * Readable by every role, like the ledger. Writes are coach/mentor: funds are
+ * the ledger's structure, so unlike the sponsorship pipeline this is not
+ * student territory.
+ */
+export function listFunds(): Promise<FundsResponse> {
+  return get<FundsResponse>('/api/finance/funds');
+}
+
+export function createFund(input: {
+  name: string;
+  note?: string | null;
+  /** Set for use-or-lose money; omit for a pot that carries over. */
+  expires_at?: number | null;
+  is_default?: boolean;
+}): Promise<Fund> {
+  return send<{ fund: Fund }>('/api/finance/funds', 'POST', input).then((r) => r.fund);
+}
+
+export function updateFund(
+  id: string,
+  patch: { name?: string; note?: string | null; expires_at?: number | null },
+): Promise<Fund> {
+  return send<{ fund: Fund }>(`/api/finance/funds/${id}`, 'PATCH', patch).then(
+    (r) => r.fund,
+  );
+}
+
+/** Where money lands when nobody named a pot. One per team. */
+export function setDefaultFund(id: string): Promise<FundsResponse> {
+  return send(`/api/finance/funds/${id}/default`, 'POST');
+}
+
+/** Refused while ledger lines point at it (`fund_in_use`). */
+export function deleteFund(id: string): Promise<{ ok: true }> {
+  return send(`/api/finance/funds/${id}`, 'DELETE');
+}
+
+/**
+ * Pre-initialise finance for a team that already has money: a reserve that
+ * carries over plus any expiring pots, each with an opening-balance ledger
+ * line. One shot — a second call answers `already_initialized`.
+ */
+export function initializeFunds(input: {
+  reserve_cents?: number | null;
+  reserve_name?: string | null;
+  funds?: { name: string; amount_cents?: number | null; expires_at?: number | null }[];
+}): Promise<FundsResponse & { created: number }> {
+  return send('/api/finance/funds/initialize', 'POST', input);
 }
 
 // --------------------------------------------------------------- sponsorship
@@ -1101,7 +1162,12 @@ export function setSponsorThanked(id: string, thanked: boolean): Promise<Sponsor
  */
 export function recordSponsorPayment(
   id: string,
-  input: { amount_cents: number; occurred_at: number; note?: string | null },
+  input: {
+    amount_cents: number;
+    occurred_at: number;
+    note?: string | null;
+    fund_id?: string | null;
+  },
 ): Promise<{ transaction: Transaction; paid_cents: number; payment_count: number }> {
   return send(`/api/finance/sponsors/${id}/payments`, 'POST', input);
 }

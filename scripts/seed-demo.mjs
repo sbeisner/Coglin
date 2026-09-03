@@ -107,7 +107,7 @@ for (const t of [
   // Prospects point at sponsors, sponsors point at campaigns, and ledger
   // lines point at sponsors — so these come before `transactions`, which
   // comes before the tenant rows below.
-  'newsletters', 'external_contacts',
+  'newsletters', 'external_contacts', 'funds',
   'sponsor_prospects', 'sponsors', 'sponsorship_tiers', 'sponsorship_campaigns',
   'transactions', 'members', 'seasons',
 ]) out(`DELETE FROM ${t} WHERE team_id = ${q(TEAM)};`);
@@ -296,6 +296,19 @@ PAGES.forEach(([no, title, owner, state]) =>
   out(`INSERT INTO portfolio_pages (id, team_id, season_id, page_no, title, owner_member_id, state)
     VALUES (${q(`pp-${no}`)}, ${q(TEAM)}, ${q(SEASON)}, ${n(no)}, ${q(title)}, ${q(owner)}, ${q(state)});`));
 
+// ------------------------------------------------------------------- funds
+// Two pots, shaped exactly as the setup form leaves them: a carryover reserve
+// (the default) and a district allocation that expires inside the warning
+// window with money still in it — so a screenshot carries the alert. Each gets
+// an opening-balance line, which is how remaining stays pure ledger math.
+const FUND_RESERVE = 'fund-reserve';
+const FUND_DISTRICT = 'fund-district';
+const DISTRICT_EXPIRES = NOW + 45 * DAY;
+out(`INSERT INTO funds (id, team_id, name, note, expires_at, is_default, created_by, created_at, updated_at)
+  VALUES (${q(FUND_RESERVE)}, ${q(TEAM)}, 'Sponsorship & donations', ${q('Carries over — this is the team\'s own money.')}, NULL, 1, 'm-coach', ${n(NOW - 100 * DAY)}, ${n(NOW - 100 * DAY)});`);
+out(`INSERT INTO funds (id, team_id, name, note, expires_at, is_default, created_by, created_at, updated_at)
+  VALUES (${q(FUND_DISTRICT)}, ${q(TEAM)}, 'District allocation FY26', ${q('Use or lose — the district takes back whatever is unspent.')}, ${n(DISTRICT_EXPIRES)}, 0, 'm-coach', ${n(NOW - 100 * DAY)}, ${n(NOW - 100 * DAY)});`);
+
 // ----------------------------------------------------------------- finance
 // A season a Sustain judge would call accounted for: income up front,
 // expenses through the build, and a part-order queue with a row in every
@@ -313,15 +326,32 @@ const TRANSACTIONS = [
   ['tx-8', 'expense', 'outreach', 'Library demo table supplies', null, 6320, 21, 'm-coach'],
   ['tx-9', 'expense', 'food', 'Scrimmage day pizza', 'Team + volunteers', 9850, 12, 'm-coach'],
 ];
+// Which pot each line came out of. Sponsorship income and the fundraiser go to
+// the carryover reserve; registration and the parts spend come out of the
+// district allocation. One expense is left unassigned on purpose, so the strip
+// shows that state too.
+const TX_FUND = {
+  'tx-1': FUND_RESERVE, 'tx-2': FUND_DISTRICT, 'tx-3': FUND_DISTRICT,
+  'tx-4': FUND_RESERVE, 'tx-5': FUND_DISTRICT, 'tx-6': null,
+  'tx-7': FUND_RESERVE, 'tx-8': FUND_RESERVE, 'tx-9': FUND_RESERVE,
+};
 for (const [id, kind, category, label, note, cents, daysAgo, by] of TRANSACTIONS) {
-  out(`INSERT INTO transactions (id, team_id, season_id, kind, category, label, note, amount_cents, occurred_at, created_by, created_at, updated_at)
-    VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(kind)}, ${q(category)}, ${q(label)}, ${q(note)}, ${n(cents)}, ${n(NOW - daysAgo * DAY)}, ${q(by)}, ${n(NOW - daysAgo * DAY)}, ${n(NOW - daysAgo * DAY)});`);
+  out(`INSERT INTO transactions (id, team_id, season_id, kind, category, label, note, amount_cents, occurred_at, fund_id, created_by, created_at, updated_at)
+    VALUES (${q(id)}, ${q(TEAM)}, ${q(SEASON)}, ${q(kind)}, ${q(category)}, ${q(label)}, ${q(note)}, ${n(cents)}, ${n(NOW - daysAgo * DAY)}, ${q(TX_FUND[id] ?? null)}, ${q(by)}, ${n(NOW - daysAgo * DAY)}, ${n(NOW - daysAgo * DAY)});`);
 }
+
+// The opening balances, as the setup form would have written them. Sized so
+// the district pot still has money in it against its 45-day deadline — which
+// is what puts the warning on the screen.
+out(`INSERT INTO transactions (id, team_id, season_id, kind, category, label, note, amount_cents, occurred_at, fund_id, created_by, created_at, updated_at)
+  VALUES ('tx-open-1', ${q(TEAM)}, ${q(SEASON)}, 'income', 'opening_balance', ${q('Sponsorship & donations — opening balance')}, ${q('What was in this fund when the team started using Coglin.')}, 84000, ${n(NOW - 100 * DAY)}, ${q(FUND_RESERVE)}, 'm-coach', ${n(NOW - 100 * DAY)}, ${n(NOW - 100 * DAY)});`);
+out(`INSERT INTO transactions (id, team_id, season_id, kind, category, label, note, amount_cents, occurred_at, fund_id, created_by, created_at, updated_at)
+  VALUES ('tx-open-2', ${q(TEAM)}, ${q(SEASON)}, 'income', 'opening_balance', ${q('District allocation FY26 — opening balance')}, ${q('What was in this fund when the team started using Coglin.')}, 95000, ${n(NOW - 100 * DAY)}, ${q(FUND_DISTRICT)}, 'm-coach', ${n(NOW - 100 * DAY)}, ${n(NOW - 100 * DAY)});`);
 
 // The expense line the 'ordered' request below points at — the promote
 // pattern, visible in a screenshot as "from a part order".
-out(`INSERT INTO transactions (id, team_id, season_id, kind, category, label, note, amount_cents, occurred_at, created_by, created_at, updated_at)
-  VALUES ('tx-order', ${q(TEAM)}, ${q(SEASON)}, 'expense', 'parts', ${q('2× goBILDA 5203 servo')}, ${q('Ordered from goBILDA')}, 7998, ${n(NOW - 5 * DAY)}, 'm-stu4', ${n(NOW - 5 * DAY)}, ${n(NOW - 5 * DAY)});`);
+out(`INSERT INTO transactions (id, team_id, season_id, kind, category, label, note, amount_cents, occurred_at, fund_id, created_by, created_at, updated_at)
+  VALUES ('tx-order', ${q(TEAM)}, ${q(SEASON)}, 'expense', 'parts', ${q('2× goBILDA 5203 servo')}, ${q('Ordered from goBILDA')}, 7998, ${n(NOW - 5 * DAY)}, ${q(FUND_DISTRICT)}, 'm-stu4', ${n(NOW - 5 * DAY)}, ${n(NOW - 5 * DAY)});`);
 
 // Nia (business sub-team) holds the approver flag — the student-treasurer
 // case the flag exists for.

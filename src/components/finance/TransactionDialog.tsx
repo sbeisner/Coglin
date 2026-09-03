@@ -36,10 +36,14 @@ import { ReceiptChips } from './ReceiptChips';
 import {
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
+  type Fund,
   type Transaction,
   type TransactionCategory,
   type TransactionKind,
 } from '@/types';
+
+/** The Select needs a value for "no fund"; '' is not one. */
+const NO_FUND = 'unassigned';
 
 export type TransactionDialogState =
   | { mode: 'create' }
@@ -66,10 +70,12 @@ function toDateInput(epochSeconds: number): string {
 
 export function TransactionDialog({
   state,
+  funds,
   onOpenChange,
   onChanged,
 }: {
   state: TransactionDialogState;
+  funds: Fund[];
   onOpenChange: (open: boolean) => void;
   onChanged: () => void;
 }) {
@@ -81,6 +87,7 @@ export function TransactionDialog({
   const [note, setNote] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
+  const [fundId, setFundId] = useState<string>(NO_FUND);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set after a create, so the dialog can offer the receipt zone for a line
@@ -105,6 +112,7 @@ export function TransactionDialog({
       setNote(editing.note ?? '');
       setAmount((editing.amount_cents / 100).toFixed(2));
       setDate(toDateInput(editing.occurred_at));
+      setFundId(editing.fund_id ?? NO_FUND);
     } else {
       setKind('expense');
       setCategory('parts');
@@ -112,6 +120,9 @@ export function TransactionDialog({
       setNote('');
       setAmount('');
       setDate(toDateInput(Math.floor(Date.now() / 1000)));
+      // Pre-fill the team's default pot, which is where money goes unless
+      // somebody says otherwise.
+      setFundId(funds.find((f) => f.is_default === 1)?.id ?? NO_FUND);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityKey]);
@@ -139,6 +150,7 @@ export function TransactionDialog({
       note: note.trim() === '' ? null : note.trim(),
       amount_cents: amountCents,
       occurred_at: Math.floor(new Date(`${date}T00:00`).getTime() / 1000),
+      fund_id: fundId === NO_FUND ? null : fundId,
     };
     try {
       if (editing) {
@@ -293,6 +305,27 @@ export function TransactionDialog({
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Which pot, only once a team has any. A team that does not
+                  track funds never sees this control. */}
+              {funds.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="tx-fund">Fund</Label>
+                  <Select value={fundId} onValueChange={setFundId}>
+                    <SelectTrigger id="tx-fund">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_FUND}>Unassigned</SelectItem>
+                      {funds.map((fund) => (
+                        <SelectItem key={fund.id} value={fund.id}>
+                          {fund.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="tx-note">Note</Label>

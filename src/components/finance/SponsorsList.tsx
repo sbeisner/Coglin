@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/EmptyState';
 import { cn } from '@/lib/utils';
 import { RecordPaymentDialog } from './RecordPaymentDialog';
-import type { Sponsor } from '@/types';
+import type { Fund, Sponsor } from '@/types';
 
 const ERROR_COPY: Record<string, string> = {
   sponsor_has_payments:
@@ -31,11 +31,13 @@ const ERROR_COPY: Record<string, string> = {
 
 export function SponsorsList({
   sponsors,
+  funds,
   canEdit,
   canRecordPayment,
   onChanged,
 }: {
   sponsors: Sponsor[];
+  funds: Fund[];
   canEdit: boolean;
   canRecordPayment: boolean;
   onChanged: () => void;
@@ -144,6 +146,7 @@ export function SponsorsList({
 
       <RecordPaymentDialog
         sponsor={paying}
+        funds={funds}
         onOpenChange={(open) => {
           if (!open) setPaying(null);
         }}

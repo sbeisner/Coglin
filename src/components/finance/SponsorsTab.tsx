@@ -67,6 +67,7 @@ export function SponsorsTab({
   const sponsors = useAsync(api.listSponsors, [reloadKey]);
   const contacts = useAsync(api.listContacts, [reloadKey]);
   const newsletters = useAsync(api.listNewsletters, [reloadKey]);
+  const fundsData = useAsync(api.listFunds, [reloadKey]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +85,7 @@ export function SponsorsTab({
   const sponsorList = useLastGood(sponsors) ?? [];
   const contactList = useLastGood(contacts) ?? [];
   const newsletterData = useLastGood(newsletters);
+  const fundList = useLastGood(fundsData)?.funds ?? [];
   // Selection falls back to the first campaign rather than being seeded in an
   // effect: the list can change under us (create, delete) and an effect would
   // race the refetch.
@@ -265,6 +267,7 @@ export function SponsorsTab({
         ) : (
           <SponsorsList
             sponsors={campaignSponsors}
+            funds={fundList}
             canEdit={canEdit}
             canRecordPayment={canRecordPayment}
             onChanged={onChanged}

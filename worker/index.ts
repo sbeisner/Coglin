@@ -6,6 +6,7 @@ import { team } from './routes/team';
 import { boards } from './routes/boards';
 import { candidates } from './routes/candidates';
 import { finance } from './routes/finance';
+import { funds } from './routes/funds';
 import { media, mediaFiles } from './routes/media';
 import { meetings } from './routes/meetings';
 import { meetingNotes } from './routes/notes';
@@ -91,6 +92,9 @@ app.route('/api/finance', finance);
 // keeps one /api/finance surface. Mounted after `finance` — the two declare
 // disjoint paths, and Hono tries them in mount order.
 app.route('/api/finance', sponsorship);
+// The third file on the finance prefix: which pot money came out of, and which
+// pots expire. Disjoint paths from the two above.
+app.route('/api/finance', funds);
 app.route('/api/media', media);
 // Both declare full paths ('/boards', '/meetings/:id/attendance') rather than a
 // prefix, so they mount at /api alongside `team`.

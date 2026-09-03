@@ -26,7 +26,16 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import type { Sponsor } from '@/types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { Fund, Sponsor } from '@/types';
+
+const NO_FUND = 'unassigned';
 
 const ERROR_COPY: Record<string, string> = {
   invalid_amount: 'Enter an amount over $0.',
@@ -44,16 +53,19 @@ function todayInput(): string {
 
 export function RecordPaymentDialog({
   sponsor,
+  funds,
   onOpenChange,
   onChanged,
 }: {
   sponsor: Sponsor | null;
+  funds: Fund[];
   onOpenChange: (open: boolean) => void;
   onChanged: () => void;
 }) {
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
   const [note, setNote] = useState('');
+  const [fundId, setFundId] = useState<string>(NO_FUND);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,6 +75,9 @@ export function RecordPaymentDialog({
     setPending(false);
     setNote('');
     setDate(todayInput());
+    // Sponsorship is the archetypal money that carries over, so the default
+    // pot is nearly always right — but a coach can send it elsewhere.
+    setFundId(funds.find((f) => f.is_default === 1)?.id ?? NO_FUND);
     // Prefill what is still outstanding rather than the whole pledge — the
     // common case for a second cheque, and correct for the first one too.
     const outstanding = sponsor.amount_cents - sponsor.paid_cents;
@@ -82,6 +97,7 @@ export function RecordPaymentDialog({
         amount_cents: amountCents,
         occurred_at: Math.floor(new Date(`${date}T00:00`).getTime() / 1000),
         note: note.trim() === '' ? null : note.trim(),
+        fund_id: fundId === NO_FUND ? null : fundId,
       });
       onChanged();
       onOpenChange(false);
@@ -130,6 +146,25 @@ export function RecordPaymentDialog({
                 />
               </div>
             </div>
+
+            {funds.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="payment-fund">Into which fund</Label>
+                <Select value={fundId} onValueChange={setFundId}>
+                  <SelectTrigger id="payment-fund">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_FUND}>Unassigned</SelectItem>
+                    {funds.map((fund) => (
+                      <SelectItem key={fund.id} value={fund.id}>
+                        {fund.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="payment-note">Note</Label>

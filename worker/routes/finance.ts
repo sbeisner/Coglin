@@ -36,8 +36,10 @@ import {
   isTransactionKind,
   MAX_AMOUNT_CENTS,
   MAX_EPOCH,
+  OPENING_BALANCE_CATEGORY,
   type TransactionKind,
 } from '../lib/finance';
+import { defaultFundId, EXPIRY_WARNING_SECONDS, resolveFundId } from '../lib/funds';
 import { RECEIPT_TYPES } from '../lib/images';
 import { ingestImage, MAX_BYTES } from './media';
 import {
@@ -53,7 +55,7 @@ import type { MiddlewareHandler } from 'hono';
 const finance = new Hono<AppEnv>();
 
 const TRANSACTION_COLUMNS = `id, kind, category, label, note, amount_cents,
-        occurred_at, created_by, created_at, updated_at`;
+        occurred_at, fund_id, sponsor_id, created_by, created_at, updated_at`;
 
 const ORDER_COLUMNS = `id, item, description, url, vendor, qty,
         unit_price_cents, status, requested_by, decided_by, decided_at,
@@ -107,10 +109,14 @@ finance.get('/transactions', requireMember, async (c) => {
               t.label AS label, t.note AS note, t.amount_cents AS amount_cents,
               t.occurred_at AS occurred_at, t.created_by AS created_by,
               t.created_at AS created_at, t.updated_at AS updated_at,
-              po.id AS order_id, po.item AS order_item
+              po.id AS order_id, po.item AS order_item,
+              t.fund_id AS fund_id, fu.name AS fund_name,
+              t.sponsor_id AS sponsor_id, sp.name AS sponsor_name
          FROM transactions t
          LEFT JOIN part_orders po
            ON po.transaction_id = t.id AND po.team_id = t.team_id
+         LEFT JOIN funds fu ON fu.id = t.fund_id AND fu.team_id = t.team_id
+         LEFT JOIN sponsors sp ON sp.id = t.sponsor_id AND sp.team_id = t.team_id
         WHERE t.team_id = ? AND t.season_id = ?
         ORDER BY t.occurred_at DESC, t.created_at DESC
         LIMIT 500`,
@@ -169,13 +175,18 @@ finance.post(
     const season = await currentSeason(c, teamId);
     if (!season) return c.json({ error: 'no_current_season' }, 409);
 
+    // Which pot this came out of: the one named, else the team's default, else
+    // unassigned for a team that does not track pots. See lib/funds.ts.
+    const fund = await resolveFundId(c.env.DB, teamId, body.fund_id as string | null | undefined);
+    if ('error' in fund) return c.json({ error: fund.error }, 400);
+
     const id = uuid();
     const now = nowSeconds();
     await c.env.DB.prepare(
       `INSERT INTO transactions
          (id, team_id, season_id, kind, category, label, note, amount_cents,
-          occurred_at, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          occurred_at, fund_id, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         id,
@@ -187,6 +198,7 @@ finance.post(
         optionalString(body.note, 1000),
         amount,
         occurredAt,
+        fund.fundId,
         member.id,
         now,
         now,
@@ -198,7 +210,10 @@ finance.post(
     )
       .bind(id, teamId)
       .first();
-    return c.json({ transaction: { ...row, order_id: null, order_item: null, receipts: [] } }, 201);
+    return c.json(
+      { transaction: { ...row, order_id: null, order_item: null, receipts: [] } },
+      201,
+    );
   },
 );
 
@@ -257,6 +272,19 @@ finance.patch(
       if (occurredAt === null) return c.json({ error: 'invalid_occurred_at' }, 400);
       sets.push('occurred_at = ?');
       values.push(occurredAt);
+    }
+    if (body.fund_id !== undefined) {
+      // Re-filing a line into another pot is the stated workflow for part
+      // orders (which always book to the default) and for anything mis-filed.
+      // An explicit null moves it back to unassigned.
+      const fund = await resolveFundId(
+        c.env.DB,
+        teamId,
+        body.fund_id as string | null,
+      );
+      if ('error' in fund) return c.json({ error: fund.error }, 400);
+      sets.push('fund_id = ?');
+      values.push(fund.fundId);
     }
     if (sets.length === 0) return c.json({ error: 'nothing_to_update' }, 400);
 
@@ -413,36 +441,85 @@ finance.delete(
  * The dashboard's four figures in one query pair. Zeros when there is no
  * current season — an empty ledger is a real answer, not an error.
  */
+/**
+ * Money that is about to disappear.
+ *
+ * Funds are TEAM-scoped, so this deliberately does not join the season the way
+ * everything else in this route does — the fund is its own scope (see
+ * migrations/0012_funds.sql). It is also why the block below is computed even
+ * when the team has no current season: an expiring allocation does not care
+ * whether the FTC season has been set up.
+ *
+ * Only pots that still have money in them and whose deadline is inside the
+ * warning window. An array rather than one row because two grants can both be
+ * closing, and a screen that mentions only the nearest would hide the other.
+ */
+const EXPIRING_FUNDS = `
+  SELECT f.id AS id, f.name AS name, f.expires_at AS expires_at,
+         COALESCE(SUM(CASE WHEN t.kind = 'income'  THEN t.amount_cents ELSE 0 END), 0)
+       - COALESCE(SUM(CASE WHEN t.kind = 'expense' THEN t.amount_cents ELSE 0 END), 0)
+           AS remaining_cents
+    FROM funds f
+    LEFT JOIN transactions t ON t.fund_id = f.id AND t.team_id = f.team_id
+   WHERE f.team_id = ?
+     AND f.expires_at IS NOT NULL
+     AND f.expires_at >= ?
+     AND f.expires_at <= ?
+   GROUP BY f.id
+  HAVING remaining_cents > 0
+   ORDER BY f.expires_at ASC`;
+
 finance.get('/summary', requireMember, async (c) => {
   const { teamId } = authOf(c);
+  const now = nowSeconds();
   const season = await currentSeason(c, teamId);
+
+  const expiringStatement = c.env.DB.prepare(EXPIRING_FUNDS).bind(
+    teamId,
+    now,
+    now + EXPIRY_WARNING_SECONDS,
+  );
+
   if (!season) {
+    // No season means no ledger totals, but funds are team-scoped and an
+    // expiring allocation is still worth shouting about.
+    const expiring = await expiringStatement.all();
     return c.json({
       income_cents: 0,
       expense_cents: 0,
+      opening_cents: 0,
       pending_orders: 0,
       pending_estimate_cents: 0,
+      expiring: expiring.results,
     });
   }
 
-  const [money, pending] = await c.env.DB.batch([
+  const [money, pending, expiring] = await c.env.DB.batch([
     c.env.DB.prepare(
+      // `income_cents` EXCLUDES opening balances: "income" means what the team
+      // raised this season, and counting a reserve it already had would
+      // overstate that in the one figure a Sustain narrative quotes. The
+      // reserve is not lost — it comes back as `opening_cents`, and BALANCE is
+      // reassembled as opening + income - expense. See lib/finance.ts.
       `SELECT
-         COALESCE(SUM(CASE WHEN kind = 'income' THEN amount_cents ELSE 0 END), 0) AS income_cents,
-         COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount_cents ELSE 0 END), 0) AS expense_cents
+         COALESCE(SUM(CASE WHEN kind = 'income' AND category <> ? THEN amount_cents ELSE 0 END), 0) AS income_cents,
+         COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount_cents ELSE 0 END), 0) AS expense_cents,
+         COALESCE(SUM(CASE WHEN kind = 'income' AND category =  ? THEN amount_cents ELSE 0 END), 0) AS opening_cents
        FROM transactions WHERE team_id = ? AND season_id = ?`,
-    ).bind(teamId, season.id),
+    ).bind(OPENING_BALANCE_CATEGORY, OPENING_BALANCE_CATEGORY, teamId, season.id),
     c.env.DB.prepare(
       `SELECT COUNT(*) AS pending_orders,
               COALESCE(SUM(qty * unit_price_cents), 0) AS pending_estimate_cents
          FROM part_orders
         WHERE team_id = ? AND season_id = ? AND status = 'pending'`,
     ).bind(teamId, season.id),
+    expiringStatement,
   ]);
 
   return c.json({
     ...(money.results[0] as Record<string, number>),
     ...(pending.results[0] as Record<string, number>),
+    expiring: expiring.results,
   });
 });
 
@@ -747,13 +824,17 @@ finance.post(
     const now = nowSeconds();
     const label =
       order.qty > 1 ? `${order.qty}× ${order.item}`.slice(0, 200) : order.item;
+    // The order flow deliberately has no fund picker: an approver pressing
+    // "mark ordered" in a pit is not the moment to ask which pot pays. It
+    // books to the default and a coach re-files the line if it mattered.
+    const fundId = await defaultFundId(c.env.DB, teamId);
 
     await c.env.DB.batch([
       c.env.DB.prepare(
         `INSERT INTO transactions
            (id, team_id, season_id, kind, category, label, note, amount_cents,
-            occurred_at, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, 'expense', 'parts', ?, ?, ?, ?, ?, ?, ?)`,
+            occurred_at, fund_id, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, 'expense', 'parts', ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         transactionId,
         teamId,
@@ -762,6 +843,7 @@ finance.post(
         order.vendor ? `Ordered from ${order.vendor}` : null,
         order.qty * order.unit_price_cents,
         now,
+        fundId,
         member.id,
         now,
         now,
