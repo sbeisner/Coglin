@@ -17,6 +17,7 @@ import { LedgerTab } from '@/components/finance/LedgerTab';
 import { OrdersTab } from '@/components/finance/OrdersTab';
 import { SponsorsTab } from '@/components/finance/SponsorsTab';
 import { formatCents } from '@/lib/format';
+import { financeBalance } from '@/types';
 
 export default function Finance() {
   // One reload key for the whole screen: a decision in the orders tab moves
@@ -32,7 +33,9 @@ export default function Finance() {
 
   const summary = useAsync(api.financeSummary, [reloadKey]);
   const s = summary.data;
-  const balance = s ? s.income_cents - s.expense_cents : null;
+  // Opening balances count here even though they are excluded from Income —
+  // the reserve is really in the bank. financeBalance is the one definition.
+  const balance = s ? financeBalance(s) : null;
 
   return (
     <>

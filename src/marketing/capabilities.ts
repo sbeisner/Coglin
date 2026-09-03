@@ -200,7 +200,7 @@ export const CAPABILITIES: Capability[] = [
     docs: 'manual',
     inMatrix: true,
     detail:
-      'Income and expense lines with receipts attached — photos or PDFs — plus part order requests any student can file and an approver signs off. Sustain asks for documentation showing progress against your plan, not only the plan. This is that documentation.',
+      'Income and expense lines with receipts attached — photos or PDFs — plus part order requests any student can file and an approver signs off. Money that expires is tracked apart from money that carries over, so Coglin can tell you in April that $340 of district allocation disappears in six weeks. Sustain asks for documentation showing progress against your plan, not only the plan. This is that documentation.',
     awards: ['sustain'],
   },
   {

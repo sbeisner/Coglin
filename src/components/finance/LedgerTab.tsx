@@ -8,12 +8,13 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import * as api from '@/lib/api';
-import { useAsync } from '@/lib/useAsync';
+import { useAsync, useLastGood } from '@/lib/useAsync';
 import { formatCents, formatDate } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/Skeleton';
 import { cn } from '@/lib/utils';
+import { FundsStrip } from './FundsStrip';
 import { ReceiptChips } from './ReceiptChips';
 import { TransactionDialog, type TransactionDialogState } from './TransactionDialog';
 import {
@@ -37,12 +38,19 @@ export function LedgerTab({
   onChanged: () => void;
 }) {
   const lines = useAsync(api.listTransactions, [reloadKey]);
+  const fundsData = useAsync(api.listFunds, [reloadKey]);
   const [dialog, setDialog] = useState<TransactionDialogState>(null);
 
   const list = lines.data ?? [];
+  // Last-known so a write does not blank the strip mid-refetch. See useLastGood.
+  const funds = useLastGood(fundsData);
 
   return (
     <div className="space-y-4">
+      {/* Which pot the money is in, and which pot is about to disappear. Above
+          the lines because it changes what you decide to spend. */}
+      <FundsStrip data={funds} canManage={canManage} onChanged={onChanged} />
+
       {canManage && (
         <div className="flex justify-end">
           <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
@@ -94,6 +102,7 @@ export function LedgerTab({
 
       <TransactionDialog
         state={dialog}
+        funds={funds?.funds ?? []}
         onOpenChange={(open) => {
           if (!open) setDialog(null);
         }}
@@ -134,12 +143,28 @@ function LedgerRow({
             <span className="bg-muted text-muted-foreground shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium">
               {CATEGORY_LABEL[t.category] ?? t.category}
             </span>
+            {t.fund_name !== null && (
+              <span
+                className="border-border text-muted-foreground shrink-0 rounded-sm border px-1.5 py-0.5 text-[10px]"
+                title="Which fund this came out of"
+              >
+                {t.fund_name}
+              </span>
+            )}
             {t.order_item !== null && (
               <span
                 className="text-muted-foreground shrink-0 text-[10px]"
                 title={`Booked from the part order: ${t.order_item}`}
               >
                 from a part order
+              </span>
+            )}
+            {t.sponsor_name !== null && (
+              <span
+                className="text-muted-foreground shrink-0 text-[10px]"
+                title={`Paid by ${t.sponsor_name}`}
+              >
+                from {t.sponsor_name}
               </span>
             )}
           </div>

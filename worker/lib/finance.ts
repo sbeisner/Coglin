@@ -39,9 +39,32 @@ export const INCOME_CATEGORIES = [
   'fundraising',
   'grant',
   'dues',
+  /**
+   * Money the team already had when it started using Coglin, or when it opened
+   * a new pot part-way through a season.
+   *
+   * A category rather than a column on `funds`, because as far as this ledger
+   * is concerned an opening balance genuinely IS money arriving — and keeping
+   * it in `transactions` is what lets a fund's remaining stay pure ledger math
+   * (see migrations/0012_funds.sql).
+   *
+   * It is the one income category the INCOME figure excludes: "income" means
+   * what the team raised this season, and counting a $1,200 reserve as income
+   * would overstate that. BALANCE includes it, because the money is really
+   * there. The summary route does both.
+   */
+  'opening_balance',
   'other',
 ] as const;
+
 export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
+
+/**
+ * Referenced by the summary query, the initialize route and the client. Named
+ * so there is one spelling of it rather than three string literals that can
+ * drift apart.
+ */
+export const OPENING_BALANCE_CATEGORY: IncomeCategory = 'opening_balance';
 
 export type TransactionCategory = ExpenseCategory | IncomeCategory;
 

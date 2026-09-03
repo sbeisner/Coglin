@@ -38,6 +38,7 @@ import { Hono } from 'hono';
 import { nowSeconds, uuid } from '../lib/crypto';
 import { boundedInt, optionalString, readJson } from '../lib/http';
 import { MAX_AMOUNT_CENTS, MAX_EPOCH } from '../lib/finance';
+import { resolveFundId } from '../lib/funds';
 import { emptyDoc, parseContent } from '../lib/notes';
 import {
   isSettableStage,
@@ -1326,13 +1327,23 @@ sponsorship.post(
     const occurredAt = boundedInt(body.occurred_at, 0, MAX_EPOCH);
     if (occurredAt === null) return c.json({ error: 'invalid_occurred_at' }, 400);
 
+    // Sponsorship is the archetypal money that carries over, so which pot it
+    // lands in matters. The dialog pre-fills the default and a coach can send
+    // it elsewhere.
+    const fund = await resolveFundId(
+      c.env.DB,
+      teamId,
+      body.fund_id as string | null | undefined,
+    );
+    if ('error' in fund) return c.json({ error: fund.error }, 400);
+
     const transactionId = uuid();
     const now = nowSeconds();
     await c.env.DB.prepare(
       `INSERT INTO transactions
          (id, team_id, season_id, kind, category, label, note, amount_cents,
-          occurred_at, sponsor_id, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, 'income', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          occurred_at, sponsor_id, fund_id, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, 'income', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         transactionId,
@@ -1346,6 +1357,7 @@ sponsorship.post(
         amount,
         occurredAt,
         sponsorId,
+        fund.fundId,
         member.id,
         now,
         now,

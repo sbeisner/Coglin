@@ -192,6 +192,7 @@ export type IncomeCategory =
   | 'fundraising'
   | 'grant'
   | 'dues'
+  | 'opening_balance'
   | 'other';
 
 export type TransactionCategory = ExpenseCategory | IncomeCategory;
@@ -211,8 +212,14 @@ export const INCOME_CATEGORIES: { id: IncomeCategory; label: string }[] = [
   { id: 'fundraising', label: 'Fundraising' },
   { id: 'grant', label: 'Grant' },
   { id: 'dues', label: 'Dues' },
+  // Money the team already had. Excluded from the Income figure and included
+  // in Balance — see worker/lib/finance.ts for the argument.
+  { id: 'opening_balance', label: 'Opening balance' },
   { id: 'other', label: 'Other' },
 ];
+
+/** Mirrors OPENING_BALANCE_CATEGORY in worker/lib/finance.ts. */
+export const OPENING_BALANCE_CATEGORY: IncomeCategory = 'opening_balance';
 
 /** A file evidencing a ledger line. `is_pdf` decides chip vs thumbnail. */
 export interface Receipt {
@@ -240,6 +247,12 @@ export interface Transaction {
   order_id: string | null;
   order_item: string | null;
   receipts: Receipt[];
+  /** Which pot it came out of. Null is "Unassigned", a real state. */
+  fund_id: string | null;
+  fund_name: string | null;
+  /** Provenance when a sponsor payment booked this line. */
+  sponsor_id: string | null;
+  sponsor_name: string | null;
 }
 
 /**
@@ -288,10 +301,92 @@ export interface PartOrder {
 }
 
 export interface FinanceSummary {
+  /** What the team RAISED this season — excludes opening balances. */
   income_cents: number;
   expense_cents: number;
+  /** Money the team already had. Balance = opening + income − expense. */
+  opening_cents: number;
   pending_orders: number;
   pending_estimate_cents: number;
+  /** Pots with money left whose deadline is inside the warning window. */
+  expiring: ExpiringFund[];
+}
+
+export interface ExpiringFund {
+  id: string;
+  name: string;
+  remaining_cents: number;
+  expires_at: number;
+}
+
+/**
+ * The one place Balance is defined, so the three screens that show it cannot
+ * disagree. Opening balances count — the money is really there — even though
+ * `income_cents` excludes them.
+ */
+export function financeBalance(summary: {
+  opening_cents: number;
+  income_cents: number;
+  expense_cents: number;
+}): number {
+  return summary.opening_cents + summary.income_cents - summary.expense_cents;
+}
+
+// ----------------------------------------------------------------- funds
+
+/**
+ * A pot of money.
+ *
+ * `expires_at` is the whole distinction: set means use-or-lose, null means it
+ * carries over. One column, because two could disagree — see
+ * migrations/0012_funds.sql.
+ */
+export interface Fund {
+  id: string;
+  name: string;
+  note: string | null;
+  expires_at: number | null;
+  /** 0 or 1. Where money lands when nobody said which pot it came from. */
+  is_default: number;
+  income_cents: number;
+  expense_cents: number;
+  transaction_count: number;
+  created_by: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+/** Lines with no fund. A real state, not a missing value. */
+export interface UnassignedFund {
+  income_cents: number;
+  expense_cents: number;
+  transaction_count: number;
+}
+
+export interface FundsResponse {
+  funds: Fund[];
+  unassigned: UnassignedFund;
+}
+
+/** How far ahead the warning starts. Mirrors EXPIRY_WARNING_DAYS in worker/lib/funds.ts. */
+export const EXPIRY_WARNING_DAYS = 60;
+
+export function fundRemaining(fund: Fund): number {
+  return fund.income_cents - fund.expense_cents;
+}
+
+/** Mirrors the predicates in worker/lib/funds.ts. */
+export function fundIsExpiring(fund: Fund): boolean {
+  return fund.expires_at !== null;
+}
+
+export function fundIsExpired(fund: Fund, now: number): boolean {
+  return fund.expires_at !== null && fund.expires_at < now;
+}
+
+export function fundIsExpiringSoon(fund: Fund, now: number): boolean {
+  if (fund.expires_at === null || fund.expires_at < now) return false;
+  return fund.expires_at - now <= EXPIRY_WARNING_DAYS * 86_400;
 }
 
 // ------------------------------------------------------------- sponsorship

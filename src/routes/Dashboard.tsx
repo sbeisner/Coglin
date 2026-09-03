@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router';
+import { TriangleAlert } from 'lucide-react';
 import * as api from '@/lib/api';
 import { useAsync } from '@/lib/useAsync';
 import {
@@ -18,7 +19,7 @@ import { EvidenceMeter } from '@/components/EvidenceMeter';
 import { MeetingCalendar } from '@/components/meetings/MeetingCalendar';
 import { Skeleton } from '@/components/Skeleton';
 import { useSession } from '@/lib/session';
-import type { AwardKey } from '@/types';
+import { financeBalance, type AwardKey } from '@/types';
 
 const AWARD_LABELS: Record<AwardKey, string> = {
   inspire: 'Inspire',
@@ -68,6 +69,9 @@ export default function Dashboard() {
    * they cannot press.
    */
   const canApprove = canManage || member.is_purchase_approver;
+  // Hoisted rather than recomputed inline twice, and via the shared helper so
+  // this cannot drift from the Finance screen. Opening balances are included.
+  const financeBalanceCents = finance.data ? financeBalance(finance.data) : null;
   const pendingOrders = useAsync(
     () =>
       canApprove
@@ -201,14 +205,11 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatTile
               value={
-                finance.data
-                  ? formatCents(finance.data.income_cents - finance.data.expense_cents)
-                  : '—'
+                financeBalanceCents === null ? '—' : formatCents(financeBalanceCents)
               }
               label="Balance"
               tone={
-                finance.data &&
-                finance.data.income_cents - finance.data.expense_cents < 0
+                financeBalanceCents !== null && financeBalanceCents < 0
                   ? 'alert'
                   : 'default'
               }
@@ -232,6 +233,30 @@ export default function Dashboard() {
               }
             />
           </div>
+
+          {/* Money that is about to disappear. A line rather than a fifth tile:
+              the grid above is full, and a tile that usually says "nothing
+              expiring" would be clutter every other day of the season. */}
+          {(finance.data?.expiring ?? []).length > 0 && (
+            <ul className="mt-3 space-y-1">
+              {finance.data!.expiring.map((fund) => (
+                <li
+                  key={fund.id}
+                  role="alert"
+                  className="border-destructive/40 bg-destructive/10 text-destructive flex flex-wrap items-center gap-x-2 rounded-md border px-3 py-2 text-sm"
+                >
+                  <TriangleAlert className="size-4 shrink-0" aria-hidden />
+                  <span>
+                    <span className="tabular font-mono">
+                      {formatCents(fund.remaining_cents)}
+                    </span>{' '}
+                    of {fund.name} disappears{' '}
+                    {relativeDays(fund.expires_at, now)}.
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
