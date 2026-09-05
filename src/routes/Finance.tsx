@@ -13,6 +13,7 @@ import { useSession } from '@/lib/session';
 import { PageHeader } from '@/components/PageHeader';
 import { StatTile } from '@/components/StatTile';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { OverviewTab } from '@/components/finance/OverviewTab';
 import { LedgerTab } from '@/components/finance/LedgerTab';
 import { OrdersTab } from '@/components/finance/OrdersTab';
 import { SponsorsTab } from '@/components/finance/SponsorsTab';
@@ -62,12 +63,19 @@ export default function Finance() {
           />
         </div>
 
-        <Tabs defaultValue="ledger">
+        {/* Overview lands first: the season-altitude answer is what someone
+            opening this screen is usually after, and the rows are one click
+            away. */}
+        <Tabs defaultValue="overview">
           <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
             <TabsTrigger value="orders">Part orders</TabsTrigger>
             <TabsTrigger value="sponsors">Sponsors</TabsTrigger>
           </TabsList>
+          <TabsContent value="overview" className="mt-4">
+            <OverviewTab reloadKey={reloadKey} />
+          </TabsContent>
           <TabsContent value="ledger" className="mt-4">
             <LedgerTab canManage={canManage} reloadKey={reloadKey} onChanged={reload} />
           </TabsContent>

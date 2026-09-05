@@ -37,6 +37,7 @@ import {
   MAX_AMOUNT_CENTS,
   MAX_EPOCH,
   OPENING_BALANCE_CATEGORY,
+  seasonMonths,
   type TransactionKind,
 } from '../lib/finance';
 import { defaultFundId, EXPIRY_WARNING_SECONDS, resolveFundId } from '../lib/funds';
@@ -74,15 +75,35 @@ const requireApprover: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
+interface SeasonRow {
+  id: string;
+  starts_at: number;
+  ends_at: number;
+}
+
+// `starts_at`/`ends_at` ride along for /breakdown, which needs the season's
+// month boundaries. Every other caller reads `.id` and ignores them.
 async function currentSeason(
   c: { env: { DB: D1Database } },
   teamId: string,
-): Promise<{ id: string } | null> {
+): Promise<SeasonRow | null> {
   return c.env.DB.prepare(
-    'SELECT id FROM seasons WHERE team_id = ? AND is_current = 1',
+    'SELECT id, starts_at, ends_at FROM seasons WHERE team_id = ? AND is_current = 1',
   )
     .bind(teamId)
-    .first<{ id: string }>();
+    .first<SeasonRow>();
+}
+
+/**
+ * The team's zone, defaulting the way meetings.ts does. Bucket boundaries are
+ * a wall-clock question, so this is not optional — see lib/finance.ts.
+ */
+async function teamTimezone(db: D1Database, teamId: string): Promise<string> {
+  const row = await db
+    .prepare('SELECT timezone FROM teams WHERE id = ?')
+    .bind(teamId)
+    .first<{ timezone: string }>();
+  return row?.timezone ?? 'America/New_York';
 }
 
 // -------------------------------------------------------------- transactions
@@ -520,6 +541,126 @@ finance.get('/summary', requireMember, async (c) => {
     ...(money.results[0] as Record<string, number>),
     ...(pending.results[0] as Record<string, number>),
     expiring: expiring.results,
+  });
+});
+
+// --------------------------------------------------------------- breakdown
+
+/**
+ * Where the money went, and the shape of the season.
+ *
+ * Separate from /summary on purpose. /summary is "the dashboard's four figures
+ * in one query pair" and Dashboard fetches it on every visit; folding a dozen
+ * breakdown rows into that payload would cost every dashboard load for a
+ * screen that renders none of it.
+ *
+ * Both figures are computed HERE rather than grouped on the client, and that is
+ * a correctness call rather than a performance one: GET /transactions is capped
+ * at LIMIT 500, so a client-side rollup would quietly start disagreeing with
+ * the Balance tile once a team crosses 500 lines — a chart missing a September,
+ * with nothing on screen to say so. Same hazard financeBalance() exists to
+ * prevent (src/types.ts).
+ *
+ * The categorisation MIRRORS /summary exactly — income excludes
+ * opening_balance, opening is carried separately — so the last balance point
+ * and the Balance tile are the same number reached two different ways. There is
+ * a test pinning that.
+ */
+const EXPENSE_BY_CATEGORY = `
+  SELECT category,
+         COALESCE(SUM(amount_cents), 0) AS total_cents,
+         COUNT(*) AS line_count
+    FROM transactions
+   WHERE team_id = ? AND season_id = ? AND kind = 'expense'
+   GROUP BY category
+   ORDER BY total_cents DESC`;
+
+finance.get('/breakdown', requireMember, async (c) => {
+  const { teamId } = authOf(c);
+  const season = await currentSeason(c, teamId);
+
+  // An empty ledger is a real answer, not an error — same call /summary makes.
+  if (!season) {
+    return c.json({ by_category: [], buckets: [], opening_cents: 0 });
+  }
+
+  const tz = await teamTimezone(c.env.DB, teamId);
+  const months = seasonMonths(season.starts_at, season.ends_at, tz);
+
+  // The bucket index as a CASE ladder over the boundaries resolved above. The
+  // first month catches everything before it and the last catches everything
+  // after, so a line dated outside the season folds into the nearest edge
+  // rather than vanishing — occurred_at is user-entered and can sit outside
+  // starts_at..ends_at even though season_id is set.
+  const ladder = months
+    .slice(1)
+    .map((_, i) => `WHEN occurred_at < ? THEN ${i}`)
+    .join('\n           ');
+  const bucketExpr = months.length === 1
+    ? '0'
+    : `CASE ${ladder}\n           ELSE ${months.length - 1} END`;
+
+  const [category, series] = await c.env.DB.batch([
+    c.env.DB.prepare(EXPENSE_BY_CATEGORY).bind(teamId, season.id),
+    c.env.DB.prepare(
+      `SELECT ${bucketExpr} AS bucket,
+              COALESCE(SUM(CASE WHEN kind = 'income'  AND category <> ? THEN amount_cents ELSE 0 END), 0) AS income_cents,
+              COALESCE(SUM(CASE WHEN kind = 'expense'                   THEN amount_cents ELSE 0 END), 0) AS expense_cents,
+              COALESCE(SUM(CASE WHEN kind = 'income'  AND category =  ? THEN amount_cents ELSE 0 END), 0) AS opening_cents,
+              COUNT(*) AS line_count
+         FROM transactions
+        WHERE team_id = ? AND season_id = ?
+        GROUP BY bucket
+        ORDER BY bucket`,
+    ).bind(
+      // Boundary params come first: they are interpolated into the SELECT list,
+      // ahead of the categorisation and the WHERE.
+      ...months.slice(1).map((slot) => slot.start),
+      OPENING_BALANCE_CATEGORY,
+      OPENING_BALANCE_CATEGORY,
+      teamId,
+      season.id,
+    ),
+  ]);
+
+  interface BucketRow {
+    bucket: number;
+    income_cents: number;
+    expense_cents: number;
+    opening_cents: number;
+    line_count: number;
+  }
+  const rows = series.results as unknown as BucketRow[];
+  const byIndex = new Map(rows.map((r) => [r.bucket, r]));
+
+  // Zero-fill. A month with no lines is a real zero column, and skipping it
+  // would make the x-axis non-uniform and the shape a lie. `line_count` is
+  // carried so the client can still tell an empty month from a busy one.
+  let running = 0;
+  let openingTotal = 0;
+  const buckets = months.map((slot, i) => {
+    const row = byIndex.get(i);
+    const income = row?.income_cents ?? 0;
+    const expense = row?.expense_cents ?? 0;
+    const opening = row?.opening_cents ?? 0;
+    openingTotal += opening;
+    // The reserve is the running balance's STARTING LEVEL in the month it was
+    // booked, not a spike of income — so it accumulates but is reported apart.
+    running += opening + income - expense;
+    return {
+      y: slot.y,
+      m: slot.m,
+      income_cents: income,
+      expense_cents: expense,
+      balance_cents: running,
+      line_count: row?.line_count ?? 0,
+    };
+  });
+
+  return c.json({
+    by_category: category.results,
+    buckets,
+    opening_cents: openingTotal,
   });
 });
 
