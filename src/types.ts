@@ -332,6 +332,46 @@ export function financeBalance(summary: {
   return summary.opening_cents + summary.income_cents - summary.expense_cents;
 }
 
+/**
+ * The Finance overview's two reads, in one payload.
+ *
+ * Both are rolled up SERVER-side, and that is a correctness call rather than a
+ * performance one: GET /transactions is capped at LIMIT 500, so grouping on the
+ * client would quietly start disagreeing with the Balance tile once a team
+ * crosses 500 lines. Same hazard financeBalance() exists to prevent.
+ */
+export interface FinanceBreakdown {
+  /** Expense totals, biggest first. Ordered server-side. */
+  by_category: CategoryTotal[];
+  /** One entry per season month, zero-filled. Never sparse. */
+  buckets: FinanceBucket[];
+  /** The reserve, carried apart from income the way FinanceSummary does. */
+  opening_cents: number;
+}
+
+export interface CategoryTotal {
+  category: TransactionCategory;
+  total_cents: number;
+  line_count: number;
+}
+
+export interface FinanceBucket {
+  /**
+   * The calendar month this column IS, resolved in the team's zone by the
+   * server. Label it from this pair — re-deriving a month from an epoch in the
+   * browser is what makes a label disagree with the column it sits under.
+   */
+  y: number;
+  m: number;
+  /** Excludes opening balances, matching FinanceSummary.income_cents. */
+  income_cents: number;
+  expense_cents: number;
+  /** Running balance at the end of this month, reserve included. */
+  balance_cents: number;
+  /** Lines booked in this month, so an empty month reads as empty. */
+  line_count: number;
+}
+
 // ----------------------------------------------------------------- funds
 
 /**

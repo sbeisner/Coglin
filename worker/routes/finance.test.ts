@@ -9,6 +9,7 @@
 import { env } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, callJson, inviteAndAccept, signUpCoach, stubResend, whoami } from './_helpers';
+import { currentSeason } from './auth';
 
 beforeAll(() => {
   stubResend();
@@ -630,5 +631,195 @@ describe('summary', () => {
     expect(summary.body.expense_cents).toBe(31240);
     expect(summary.body.pending_orders).toBe(1);
     expect(summary.body.pending_estimate_cents).toBe(3000);
+  });
+});
+
+// ----------------------------------------------------------------- breakdown
+
+interface CategoryTotal {
+  category: string;
+  total_cents: number;
+  line_count: number;
+}
+interface Bucket {
+  y: number;
+  m: number;
+  income_cents: number;
+  expense_cents: number;
+  balance_cents: number;
+  line_count: number;
+}
+interface Breakdown {
+  by_category: CategoryTotal[];
+  buckets: Bucket[];
+  opening_cents: number;
+}
+interface Summary {
+  income_cents: number;
+  expense_cents: number;
+  opening_cents: number;
+}
+
+/**
+ * Dates have to be built from the CURRENT season, not written as literals.
+ * A signup creates the season Sept 1 - May 31 around `now` (auth.ts
+ * currentSeason), so a hardcoded 2025 date silently falls outside the season
+ * once the calendar rolls and folds into the ladder's leading edge -- which
+ * makes these tests pass for the wrong reason rather than fail.
+ */
+const SEASON_START_YEAR = new Date(
+  currentSeason(Math.floor(Date.now() / 1000)).starts_at * 1000,
+).getUTCFullYear();
+
+/** A UTC instant in the current season. `m` is a calendar month, Sept = 9. */
+const inSeason = (m: number, d: number, hh = 12) =>
+  Math.floor(
+    Date.UTC(m >= 9 ? SEASON_START_YEAR : SEASON_START_YEAR + 1, m - 1, d, hh) / 1000,
+  );
+
+describe('breakdown', () => {
+  it('rolls expenses up by category, biggest first', async () => {
+    const cookie = await signUpCoach(5140);
+
+    await createTransaction(cookie, { category: 'parts', amount_cents: 10000 });
+    await createTransaction(cookie, { category: 'parts', amount_cents: 5000 });
+    await createTransaction(cookie, { category: 'travel', amount_cents: 40000 });
+    await createTransaction(cookie, {
+      kind: 'income',
+      category: 'sponsorship',
+      amount_cents: 90000,
+    });
+
+    const res = await callJson<Breakdown>('/api/finance/breakdown', { cookie });
+    expect(res.status).toBe(200);
+
+    // Income must not leak into the expense rollup, and the order is the
+    // answer to "where did it go" -- so it is asserted, not incidental.
+    expect(res.body.by_category).toEqual([
+      { category: 'travel', total_cents: 40000, line_count: 1 },
+      { category: 'parts', total_cents: 15000, line_count: 2 },
+    ]);
+  });
+
+  /**
+   * The invariant that matters most: the chart's last balance point and the
+   * Balance tile are the same number reached by different arithmetic. If this
+   * fails, a chart is disagreeing with the tile 200px above it.
+   */
+  it("ends at the same balance the summary reports", async () => {
+    const cookie = await signUpCoach(5141);
+
+    await createTransaction(cookie, {
+      kind: 'income',
+      category: 'opening_balance',
+      amount_cents: 250000,
+      occurred_at: inSeason(9, 5),
+    });
+    await createTransaction(cookie, {
+      kind: 'income',
+      category: 'fundraising',
+      amount_cents: 60000,
+      occurred_at: inSeason(11, 12),
+    });
+    await createTransaction(cookie, {
+      category: 'registration',
+      amount_cents: 82500,
+      occurred_at: inSeason(10, 2),
+    });
+    await createTransaction(cookie, {
+      category: 'parts',
+      amount_cents: 31240,
+      occurred_at: inSeason(2, 20),
+    });
+
+    const [breakdown, summary] = await Promise.all([
+      callJson<Breakdown>('/api/finance/breakdown', { cookie }),
+      callJson<Summary>('/api/finance/summary', { cookie }),
+    ]);
+
+    const tile =
+      summary.body.opening_cents + summary.body.income_cents - summary.body.expense_cents;
+    const last = breakdown.body.buckets[breakdown.body.buckets.length - 1];
+    expect(last.balance_cents).toBe(tile);
+    expect(last.balance_cents).toBe(250000 + 60000 - 82500 - 31240);
+  });
+
+  it('carries the reserve as opening_cents, not as income', async () => {
+    const cookie = await signUpCoach(5142);
+
+    await createTransaction(cookie, {
+      kind: 'income',
+      category: 'opening_balance',
+      amount_cents: 120000,
+      occurred_at: inSeason(9, 10),
+    });
+    await createTransaction(cookie, {
+      kind: 'income',
+      category: 'grant',
+      amount_cents: 45000,
+      occurred_at: inSeason(9, 20),
+    });
+
+    const res = await callJson<Breakdown>('/api/finance/breakdown', { cookie });
+    const september = res.body.buckets[0];
+    expect(res.body.opening_cents).toBe(120000);
+    expect(september.income_cents).toBe(45000);
+    // Both still move the running balance -- the reserve is really in the bank.
+    expect(september.balance_cents).toBe(165000);
+  });
+
+  it('zero-fills the months nothing happened in', async () => {
+    const cookie = await signUpCoach(5143);
+
+    await createTransaction(cookie, {
+      category: 'parts',
+      amount_cents: 10000,
+      occurred_at: inSeason(9, 15),
+    });
+
+    const res = await callJson<Breakdown>('/api/finance/breakdown', { cookie });
+    // Sept through May: nine columns, however few lines exist. A skipped month
+    // would make the x-axis non-uniform and the shape a lie.
+    expect(res.body.buckets).toHaveLength(9);
+    expect(res.body.buckets.map((b) => b.m)).toEqual([9, 10, 11, 12, 1, 2, 3, 4, 5]);
+    expect(res.body.buckets[1]).toMatchObject({ line_count: 0, expense_cents: 0 });
+    // The balance carries forward across the empty months rather than resetting.
+    expect(res.body.buckets.every((b) => b.balance_cents === -10000)).toBe(true);
+  });
+
+  /**
+   * The regression that finding #3 exists to prevent. 2025-11-01 00:30 UTC is
+   * still 2025-10-31 20:30 in New York, so a UTC bucket puts this in November
+   * and the team sees October money in the wrong column.
+   */
+  it('buckets by the team timezone, not UTC', async () => {
+    const cookie = await signUpCoach(5144);
+
+    await createTransaction(cookie, {
+      category: 'parts',
+      amount_cents: 7700,
+      occurred_at: inSeason(11, 1, 0) + 30 * 60,
+    });
+
+    const res = await callJson<Breakdown>('/api/finance/breakdown', { cookie });
+    const october = res.body.buckets.find((b) => b.m === 10);
+    const november = res.body.buckets.find((b) => b.m === 11);
+    expect(october?.expense_cents).toBe(7700);
+    expect(november?.expense_cents).toBe(0);
+  });
+
+  it('is readable by a viewer', async () => {
+    const cookie = await signUpCoach(5145);
+    await createTransaction(cookie);
+    const { cookie: viewer } = await inviteAndAccept(cookie, {
+      role: 'viewer',
+      handle: 'breakdownviewer',
+    });
+
+    const res = await callJson<Breakdown>('/api/finance/breakdown', {
+      cookie: viewer,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.by_category).toHaveLength(1);
   });
 });

@@ -155,9 +155,22 @@
   --readiness-partial: var(--amber-500);
   --readiness-ready: var(--goblin-500);
 
+  /* Chart series. Two rules, because the bright ramp cannot carry a thin mark:
+     the plain token is a FILL, and any stroke — or any mark under ~24px — uses
+     the `-ink` step, the same split --primary-ink makes above.
+
+     The reason is measured, not stylistic. --chart-1 is goblin-500 (#4fce74),
+     which is 2.0:1 against --card, and --chart-3 is 2.7:1. WCAG 1.4.11 wants
+     3:1 for a graphical object, and LIGHT is the default theme, so a series
+     stroked in --chart-1 ships invisible on the theme most people see. Bars
+     get the bright fill plus a 1px -ink stroke so the shape is defined either
+     way. Only 1 and 3 need the step; 2, 4 and 5 clear the floor on both
+     themes. */
   --chart-1: var(--goblin-500);
+  --chart-1-ink: var(--goblin-700);
   --chart-2: var(--alliance-500);
   --chart-3: oklch(0.7 0.13 90);
+  --chart-3-ink: oklch(0.5 0.12 90);
   --chart-4: oklch(0.55 0.1 300);
   --chart-5: oklch(0.65 0.11 200);
 
@@ -229,9 +242,13 @@
   --readiness-partial: var(--amber-500);
   --readiness-ready: var(--goblin-500);
 
+  /* On the ink slab the bright ramp is already high-contrast, so the -ink steps
+     invert: they are LIGHTER here, not darker. Same contract, mirrored. */
   --chart-1: var(--goblin-500);
+  --chart-1-ink: var(--goblin-400);
   --chart-2: var(--alliance-500);
   --chart-3: oklch(0.76 0.13 90);
+  --chart-3-ink: oklch(0.84 0.12 90);
   --chart-4: oklch(0.66 0.1 300);
   --chart-5: oklch(0.72 0.1 200);
 
@@ -290,8 +307,10 @@
   --color-readiness-ready: var(--readiness-ready);
 
   --color-chart-1: var(--chart-1);
+  --color-chart-1-ink: var(--chart-1-ink);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
+  --color-chart-3-ink: var(--chart-3-ink);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
