@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addMonths,
   dayKey,
+  formatBytes,
   formatDayName,
   formatMonthTitle,
   monthGrid,
@@ -136,5 +137,25 @@ describe('dayKey', () => {
   it('agrees with monthOf about which month a day is in', () => {
     const seconds = 1_800_000_000;
     expect(monthOfDay(dayKey(seconds))).toEqual(monthOf(seconds));
+  });
+});
+
+describe('formatBytes', () => {
+  it('uses decimal units, the way a file manager does', () => {
+    expect(formatBytes(0)).toBe('0 B');
+    expect(formatBytes(999)).toBe('999 B');
+    expect(formatBytes(1000)).toBe('1 KB');
+    expect(formatBytes(45_000)).toBe('45 KB');
+    expect(formatBytes(2_400_000)).toBe('2.4 MB');
+  });
+
+  it('keeps a decimal in megabytes, so the 25 MB limit is legible', () => {
+    expect(formatBytes(24_900_000)).toBe('24.9 MB');
+    expect(formatBytes(25 * 1000 * 1000)).toBe('25.0 MB');
+  });
+
+  it('says nothing rather than something wrong', () => {
+    expect(formatBytes(-1)).toBe('');
+    expect(formatBytes(Number.NaN)).toBe('');
   });
 });

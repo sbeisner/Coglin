@@ -51,6 +51,7 @@ export const DOC_NODE_TYPES = [
   'hardBreak',
   'horizontalRule',
   'mediaImage',
+  'mediaFile',
 ] as const;
 export type DocNodeType = (typeof DOC_NODE_TYPES)[number];
 
@@ -68,6 +69,54 @@ export type ContentError =
   | 'invalid_content'
   | 'content_too_large'
   | 'too_many_nodes';
+
+/**
+ * Bounds on the attributes of the nodes that carry any.
+ *
+ * `attrs` went unvalidated for as long as every attribute was an id or a number
+ * put there by our own editor. `mediaFile.filename` is neither: it is text that
+ * originates with whoever uploaded the file and gets rendered into a chip. Two
+ * things follow that are worth a check. A 200KB filename fits comfortably under
+ * MAX_CONTENT_BYTES inside one node, and a chip reading `budget.pdf` that
+ * downloads `payload.stl` is a small social-engineering primitive — which is
+ * why the client adopts the server's sanitised name rather than keeping its own.
+ *
+ * Deliberately narrow. Only the node types listed here are checked at all, and
+ * only for the attributes named, so this stays a bound on known hazards rather
+ * than a second schema to keep in sync with the editor.
+ */
+const MAX_ATTR_STRING = 120;
+const MAX_ATTR_ID = 64;
+
+function validAttrs(node: JsonNode): boolean {
+  if (node.type !== 'mediaFile') return true;
+  const attrs = node.attrs;
+  if (attrs === undefined) return true;
+  if (typeof attrs !== 'object' || attrs === null) return false;
+
+  const { filename, size, mediaId, uploadId } = attrs as Record<string, unknown>;
+
+  if (filename !== undefined && filename !== null) {
+    if (typeof filename !== 'string' || filename.length > MAX_ATTR_STRING) {
+      return false;
+    }
+  }
+  if (size !== undefined && size !== null) {
+    if (
+      typeof size !== 'number' ||
+      !Number.isFinite(size) ||
+      size < 0 ||
+      size > 25 * 1024 * 1024
+    ) {
+      return false;
+    }
+  }
+  for (const id of [mediaId, uploadId]) {
+    if (id === undefined || id === null) continue;
+    if (typeof id !== 'string' || id.length > MAX_ATTR_ID) return false;
+  }
+  return true;
+}
 
 /**
  * Validate a document body and derive its plain text in one walk.
@@ -111,10 +160,19 @@ export function parseContent(
     if (!NODE_TYPES.has(node.type)) return { error: 'invalid_content' };
     if (depth > MAX_NODE_DEPTH) return { error: 'invalid_content' };
     if (++nodes > MAX_NODES) return { error: 'too_many_nodes' };
+    if (!validAttrs(node)) return { error: 'invalid_content' };
 
     if (node.type === 'text') {
       if (typeof node.text !== 'string') return { error: 'invalid_content' };
       parts.push(node.text);
+    }
+    // An attachment contributes its NAME to the text projection, unlike a photo,
+    // which contributes nothing. content_text powers the notes search, and
+    // `arm_bracket_v3.step` is usually the only searchable trace an attachment
+    // leaves anywhere in the document.
+    if (node.type === 'mediaFile') {
+      const filename = node.attrs?.filename;
+      if (typeof filename === 'string') parts.push(filename);
     }
     if (node.content !== undefined) {
       if (!Array.isArray(node.content)) return { error: 'invalid_content' };

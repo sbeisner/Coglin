@@ -55,15 +55,26 @@ const KIND_LABEL: Record<string, string> = {
   image: 'Photo',
 };
 
+/**
+ * Every state gets a tab, `placed` included.
+ *
+ * It was missing, and a placed candidate is filtered by state like all the
+ * others — so it rendered on no tab at all while still counting toward the
+ * Flagged tile. Unflagging one is refused with 409 candidate_placed, which left
+ * it stuck in a list with no way to reach it. Two dead ends, one omission.
+ */
 const TABS: { id: CandidateState; label: string }[] = [
   { id: 'candidate', label: 'Inbox' },
   { id: 'shortlisted', label: 'Shortlist' },
+  { id: 'placed', label: 'Placed' },
   { id: 'rejected', label: 'Set aside' },
 ];
 
 export default function Portfolio() {
   const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<CandidateState>('candidate');
+  const [unflagging, setUnflagging] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const all = useAsync(() => api.listCandidates(), [reloadKey]);
   const { member } = useSession();
   const canTriage = member.role !== 'viewer';
@@ -94,6 +105,37 @@ export default function Portfolio() {
   async function setAward(id: string, award: AwardKey | null) {
     await api.updateCandidate(id, { suggested_award: award });
     setReloadKey((k) => k + 1);
+  }
+
+  /**
+   * Remove the flag entirely, rather than filing it under a state.
+   *
+   * This screen had no unflag control at all, and the only other one in the app
+   * is the toggle in the note editor — which is unreachable once the note is
+   * deleted, because the editor bails on `if (!doc.data) return` and the deleted
+   * document 404s. So a flag on a deleted note could never be cleared from
+   * anywhere: it sat in the inbox forever, badged "Source deleted", counted in
+   * the Flagged tile. The DELETE route was fine the whole time; nothing called it.
+   *
+   * Offered for every candidate, not only the deleted ones — "I should not have
+   * flagged this" is the same want whether or not the source still exists.
+   */
+  async function unflag(candidate: api.HydratedCandidate) {
+    setUnflagging(candidate.id);
+    setError(null);
+    try {
+      await api.unflagCandidate(candidate.source_type, candidate.source_id);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      const code = err instanceof Error ? err.message : '';
+      setError(
+        code === 'candidate_placed'
+          ? 'This is already placed on a portfolio page. Take it off the page first.'
+          : 'Could not remove the flag. Try again.',
+      );
+    } finally {
+      setUnflagging(null);
+    }
   }
 
   return (
@@ -139,6 +181,12 @@ export default function Portfolio() {
             );
           })}
         </div>
+
+        {error && (
+          <p role="alert" className="text-destructive text-sm">
+            {error}
+          </p>
+        )}
 
         {all.status === 'ready' && list.length === 0 ? (
           <EmptyState
@@ -301,6 +349,18 @@ export default function Portfolio() {
                           Back to inbox
                         </Button>
                       )}
+                      {/* The only unflag control in the app that works on a
+                          deleted source. Last in the row because it is the one
+                          action here that throws something away. */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={unflagging === candidate.id}
+                        className="text-muted-foreground"
+                        onClick={() => void unflag(candidate)}
+                      >
+                        Remove flag
+                      </Button>
                     </div>
                   )}
                 </li>

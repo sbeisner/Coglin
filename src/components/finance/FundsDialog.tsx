@@ -4,7 +4,7 @@
  * A dialog rather than a tab because a team has three or four of these and
  * touches them twice a season — at setup and when a new allocation lands.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, Plus, Trash2 } from 'lucide-react';
 import * as api from '@/lib/api';
 import { formatCents, formatDate } from '@/lib/format';
@@ -55,6 +55,19 @@ export function FundsDialog({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+
+  // Reset on OPEN, the same convention TransactionDialog uses. Closing this
+  // dialog cleared nothing, so a half-typed fund name and a pending "Remove?"
+  // confirmation both survived into the next open — the second of those being
+  // a delete button already armed against a fund nobody was looking at.
+  useEffect(() => {
+    if (!open) return;
+    setName('');
+    setExpires('');
+    setError(null);
+    setConfirming(null);
+    setPending(false);
+  }, [open]);
 
   async function act(fn: () => Promise<unknown>) {
     setPending(true);

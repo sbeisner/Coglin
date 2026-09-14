@@ -418,3 +418,24 @@ describe('stripMetadata', () => {
     expect(stripMetadata(desynced, 'image/jpeg')).toEqual(desynced);
   });
 });
+
+describe('sniff and the attachment path', () => {
+  const text = (t: string) => new Uint8Array([...t].map((c) => c.charCodeAt(0)));
+
+  it('does not mistake a CAD file for an image', () => {
+    // ingestFile relies on this returning null: it refuses anything sniff()
+    // recognises, so that an image renamed to .stl cannot reach the one upload
+    // path that never strips EXIF. If sniff ever started guessing, that guard
+    // would start rejecting real CAD files instead.
+    expect(sniff(text('solid cube\n facet normal 0 0 1\n'))).toBeNull();
+    expect(sniff(text('ISO-10303-21;\nHEADER;\n'))).toBeNull();
+    expect(sniff(text('G1 X10 Y10 F1500\nG1 Z0.2\n'))).toBeNull();
+  });
+
+  it('still recognises an image no matter what it is named', () => {
+    // The other half of the same guard.
+    const png = new Uint8Array(20);
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    expect(sniff(png)).toBe('image/png');
+  });
+});

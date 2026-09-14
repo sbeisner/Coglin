@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { HandCoins } from 'lucide-react';
+import { HandCoins, Pencil } from 'lucide-react';
 import * as api from '@/lib/api';
 import { useAsync } from '@/lib/useAsync';
 import { useSession } from '@/lib/session';
 import { InviteDialog } from '@/components/InviteDialog';
+import { MemberEditDialog } from '@/components/MemberEditDialog';
 import { RosterPhoto } from '@/components/RosterPhoto';
 import { PageHeader } from '@/components/PageHeader';
 import { Skeleton } from '@/components/Skeleton';
@@ -21,12 +22,14 @@ export default function Roster() {
   // Bumping this refetches the roster after an invite is accepted or created,
   // rather than hand-patching local state with a member who does not exist yet.
   const [reloadKey, setReloadKey] = useState(0);
+  const [editing, setEditing] = useState<Member | null>(null);
   const members = useAsync(api.listMembers, [reloadKey]);
   const { member: me } = useSession();
   const canInvite = me.role === 'coach' || me.role === 'mentor';
   const list = members.data ?? [];
   const students = list.filter((m) => m.role === 'student');
   const adults = list.filter((m) => m.role !== 'student');
+  const unassigned = students.filter((m) => m.sub_teams.length === 0);
 
   return (
     <>
@@ -72,6 +75,7 @@ export default function Roster() {
                   key={m.id}
                   member={m}
                   canManage={canInvite}
+                  onEdit={setEditing}
                   onChanged={() => setReloadKey((k) => k + 1)}
                 />
               ))}
@@ -94,17 +98,55 @@ export default function Roster() {
               <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {group.map((m) => (
                   <MemberRow
-                  key={m.id}
-                  member={m}
-                  canManage={canInvite}
-                  onChanged={() => setReloadKey((k) => k + 1)}
-                />
+                    key={m.id}
+                    member={m}
+                    canManage={canInvite}
+                    onEdit={setEditing}
+                    onChanged={() => setReloadKey((k) => k + 1)}
+                  />
                 ))}
               </ul>
             </section>
           );
         })}
+
+        {/* Students with no sub-team, who until now appeared NOWHERE.
+            The sections above are built by mapping over the sub-teams and
+            skipping the empty ones, so an empty `sub_teams` array — the column
+            default, and what every invite without a ticked chip produces — meant
+            a student counted in the tile at the top of this page and rendered in
+            no list at all. Invisible, and with no way to fix them: there was no
+            route that could change a member's sub-teams. This group is where you
+            find them, and the pencil beside each one is where you assign them. */}
+        {unassigned.length > 0 && (
+          <section>
+            <h2 className="u-eyebrow mb-3">
+              No sub-team yet{' '}
+              <span className="tabular font-mono">{unassigned.length}</span>
+            </h2>
+            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {unassigned.map((m) => (
+                <MemberRow
+                  key={m.id}
+                  member={m}
+                  canManage={canInvite}
+                  onEdit={setEditing}
+                  onChanged={() => setReloadKey((k) => k + 1)}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
+
+      <MemberEditDialog
+        member={editing}
+        canChangeRole={me.role === 'coach'}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+        onChanged={() => setReloadKey((k) => k + 1)}
+      />
     </>
   );
 }
@@ -132,10 +174,12 @@ function Count({
 function MemberRow({
   member,
   canManage,
+  onEdit,
   onChanged,
 }: {
   member: Member;
   canManage: boolean;
+  onEdit: (member: Member) => void;
   onChanged: () => void;
 }) {
   const [savingApprover, setSavingApprover] = useState(false);
@@ -214,6 +258,20 @@ function MemberRow({
             </span>
           )
         ))}
+      {/* Sub-teams, role and removal. Every one of those was write-once at
+          invite time until now, so a roster row was a thing you could only get
+          wrong once. */}
+      {canManage && (
+        <button
+          type="button"
+          aria-label={`Edit ${member.display_name}`}
+          title="Edit sub-teams and role"
+          onClick={() => onEdit(member)}
+          className="text-muted-foreground hover:text-primary-ink focus-visible:ring-ring flex size-11 shrink-0 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none md:size-7"
+        >
+          <Pencil className="size-4" aria-hidden />
+        </button>
+      )}
       <span
         className={cn(
           'shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium',

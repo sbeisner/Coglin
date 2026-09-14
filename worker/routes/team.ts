@@ -9,6 +9,7 @@ import { Hono } from 'hono';
 import { nowSeconds } from '../lib/crypto';
 import { readJson, optionalString } from '../lib/http';
 import { isValidTimeZone } from '../lib/tz';
+import { isRole, normaliseSubTeams } from '../lib/roles';
 import { deleteRosterPhoto, ingestImage, MAX_BYTES } from './media';
 import {
   auth as authOf,
@@ -149,10 +150,17 @@ team.get('/members', requireMember, async (c) => {
 });
 
 /**
- * Flip the part-order approver flag (0009). Coach or mentor only — granting
- * approval reach is a leadership act, even though holding it is not a role.
- * The only writable field on a member so far; if this route grows more, keep
- * each field's own validation the way PATCH /team does.
+ * Edit a member: sub-teams, role, the part-order approver flag, or removal.
+ *
+ * Until now this accepted only `is_purchase_approver`, which meant sub-teams
+ * were write-once at invite time and could never be corrected — a coach who
+ * forgot to tick them had no way back, and the founding coach is inserted with
+ * `'[]'` hardcoded (routes/auth.ts) so their own were permanently empty.
+ *
+ * Each field validates separately, the way PATCH /team does, and the SET list is
+ * built from whichever arrived. Coach or mentor may edit sub-teams and the
+ * approver flag; only a coach may change a role or remove somebody, because both
+ * of those can take the team away from the people who run it.
  */
 team.patch(
   '/members/:id',
@@ -162,21 +170,99 @@ team.patch(
   async (c) => {
     const body = await readJson(c);
     if (!body) return c.json({ error: 'invalid_body' }, 400);
-    const { teamId } = authOf(c);
+    const { teamId, member: me } = authOf(c);
+    const memberId = c.req.param('id');
 
-    if (typeof body.is_purchase_approver !== 'boolean') {
-      return c.json({ error: 'nothing_to_update' }, 400);
+    const sets: string[] = [];
+    const values: unknown[] = [];
+
+    if (body.sub_teams !== undefined) {
+      if (!Array.isArray(body.sub_teams)) {
+        return c.json({ error: 'invalid_sub_teams' }, 400);
+      }
+      sets.push('sub_teams = ?');
+      values.push(normaliseSubTeams(body.sub_teams));
+    }
+
+    if (body.is_purchase_approver !== undefined) {
+      if (typeof body.is_purchase_approver !== 'boolean') {
+        return c.json({ error: 'invalid_purchase_approver' }, 400);
+      }
+      sets.push('is_purchase_approver = ?');
+      values.push(body.is_purchase_approver ? 1 : 0);
+    }
+
+    const changingRole = body.role !== undefined;
+    const removing = body.status !== undefined;
+
+    if (changingRole || removing) {
+      if (me.role !== 'coach') return c.json({ error: 'forbidden' }, 403);
+    }
+
+    if (changingRole) {
+      if (!isRole(body.role)) return c.json({ error: 'invalid_role' }, 400);
+      sets.push('role = ?');
+      values.push(body.role);
+    }
+
+    if (removing) {
+      if (body.status !== 'active' && body.status !== 'removed') {
+        return c.json({ error: 'invalid_status' }, 400);
+      }
+      sets.push('status = ?');
+      values.push(body.status);
+    }
+
+    if (sets.length === 0) return c.json({ error: 'nothing_to_update' }, 400);
+
+    /**
+     * The last coach may not be demoted or removed — including by themselves.
+     *
+     * This is the ONLY guard on the two dangerous fields, and deliberately so.
+     * An earlier version also refused any coach changing their own row, which
+     * read as prudence and was not: it made this check unreachable (if the
+     * target is a coach and is not you, there are by definition two coaches) and
+     * it blocked the one legitimate thing a departing coach needs to do — hand
+     * over, then take themselves off.
+     *
+     * What actually has to be prevented is a team with zero coaches. Coach is
+     * the only role that can hand out coach, so that team has no path back which
+     * does not involve someone with database access. Checked against the
+     * target's CURRENT row, so it fires whether the request demotes them or
+     * deactivates them.
+     */
+    if (changingRole || removing) {
+      const target = await c.env.DB.prepare(
+        "SELECT role FROM members WHERE id = ? AND team_id = ? AND status = 'active'",
+      )
+        .bind(memberId, teamId)
+        .first<{ role: string }>();
+      if (!target) return c.json({ error: 'not_found' }, 404);
+
+      const losingACoach =
+        target.role === 'coach' &&
+        ((changingRole && body.role !== 'coach') || body.status === 'removed');
+      if (losingACoach) {
+        const coaches = await c.env.DB.prepare(
+          "SELECT COUNT(*) AS n FROM members WHERE team_id = ? AND role = 'coach' AND status = 'active'",
+        )
+          .bind(teamId)
+          .first<{ n: number }>();
+        if ((coaches?.n ?? 0) <= 1) {
+          return c.json({ error: 'last_coach' }, 409);
+        }
+      }
     }
 
     const result = await c.env.DB.prepare(
-      `UPDATE members SET is_purchase_approver = ?
+      `UPDATE members SET ${sets.join(', ')}
         WHERE id = ? AND team_id = ? AND status = 'active'`,
     )
-      .bind(body.is_purchase_approver ? 1 : 0, c.req.param('id'), teamId)
+      .bind(...values, memberId, teamId)
       .run();
     if (result.meta.changes === 0) return c.json({ error: 'not_found' }, 404);
 
-    return c.json({ ok: true, is_purchase_approver: body.is_purchase_approver });
+    return c.json({ ok: true });
   },
 );
 

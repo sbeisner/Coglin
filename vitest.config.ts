@@ -46,6 +46,12 @@ export default defineConfig({
       };
     }),
   ],
+  resolve: {
+    // The same '@' alias vite.config.ts sets. Needed here too, or any src/ test
+    // whose subject imports a sibling by alias fails to resolve — the worker
+    // tests never noticed because nothing under worker/ uses it.
+    alias: { '@': path.resolve(import.meta.dirname, './src') },
+  },
   test: {
     setupFiles: ['./worker/test-setup.ts'],
   },

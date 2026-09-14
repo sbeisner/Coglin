@@ -11,15 +11,42 @@
  */
 import type { NoteDocSummary } from '@/types';
 
+export interface DocMark {
+  type: string;
+  attrs?: Record<string, unknown>;
+}
+
 export interface DocNode {
   type: string;
   text?: string;
   content?: DocNode[];
   attrs?: Record<string, unknown>;
+  marks?: DocMark[];
+}
+
+/**
+ * The href on a text node, if it carries a link mark.
+ *
+ * Marks were ignored entirely until now, which meant every URL in a note was
+ * silently dropped on the way to the clipboard — the text survived, the link
+ * did not. Given that what gets pasted into Discord IS the note, that lost the
+ * single most useful thing a note can carry.
+ */
+function linkHref(node: DocNode): string | null {
+  const mark = node.marks?.find((m) => m.type === 'link');
+  const href = mark?.attrs?.href;
+  return typeof href === 'string' && href.length > 0 ? href : null;
 }
 
 function inline(node: DocNode): string {
-  if (node.type === 'text') return node.text ?? '';
+  if (node.type === 'text') {
+    const text = node.text ?? '';
+    const href = linkHref(node);
+    // Bare autolinked URLs are the common case, and `[url](url)` is noise no
+    // reader wants. Only wrap when the label actually differs from the target.
+    if (!href || text === href) return text;
+    return `[${text}](${href})`;
+  }
   if (node.type === 'hardBreak') return '\n';
   return (node.content ?? []).map(inline).join('');
 }
@@ -72,6 +99,14 @@ function block(node: DocNode, depth: number): string {
     case 'mediaImage': {
       const caption = typeof node.attrs?.alt === 'string' ? node.attrs.alt : '';
       return caption ? `(photo: ${caption})` : '(photo)';
+    }
+    case 'mediaFile': {
+      // Without a case here the `default` falls through to inline(), which
+      // returns '' for an atom — so the attachment would simply vanish from a
+      // copied note, which is how most people read these.
+      const filename =
+        typeof node.attrs?.filename === 'string' ? node.attrs.filename : '';
+      return filename ? `(file: ${filename})` : '(file)';
     }
     default:
       return inline(node);

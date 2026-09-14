@@ -220,3 +220,18 @@ export function formatDayName(day: number): string {
     timeZone: 'UTC',
   });
 }
+
+/**
+ * "2.4 MB" — a file size on an attachment chip.
+ *
+ * Decimal units, not binary, because that is what a file manager shows a
+ * student looking at the same file on their own machine. Bytes and kilobytes
+ * round to whole numbers; megabytes keep one decimal, which is the difference
+ * between "is this near the 25 MB limit" being answerable and not.
+ */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1000) return `${Math.round(bytes)} B`;
+  if (bytes < 1000 * 1000) return `${Math.round(bytes / 1000)} KB`;
+  return `${(bytes / (1000 * 1000)).toFixed(1)} MB`;
+}

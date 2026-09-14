@@ -66,11 +66,13 @@ import type {
   PartOrder,
   PortfolioCandidate,
   ProspectStage,
+  Role,
   Season,
   Sponsor,
   SponsorProspect,
   SponsorshipCampaign,
   SponsorshipTier,
+  SubTeam,
   Task,
   Team,
   Transaction,
@@ -898,10 +900,28 @@ export function cancelPartOrder(id: string): Promise<PartOrder> {
 export function setPurchaseApprover(
   memberId: string,
   isApprover: boolean,
-): Promise<{ ok: true; is_purchase_approver: boolean }> {
+): Promise<{ ok: true }> {
   return send(`/api/members/${memberId}`, 'PATCH', {
     is_purchase_approver: isApprover,
   });
+}
+
+/**
+ * Edit a roster row.
+ *
+ * `sub_teams` is coach or mentor; `role` and `status` are coach only, and the
+ * server refuses both on yourself and on the last remaining coach. Errors that
+ * reach the caller: `last_coach`, `cannot_change_self`, `forbidden`.
+ */
+export function updateMember(
+  memberId: string,
+  patch: {
+    sub_teams?: SubTeam[];
+    role?: Role;
+    status?: 'active' | 'removed';
+  },
+): Promise<{ ok: true }> {
+  return send(`/api/members/${memberId}`, 'PATCH', patch);
 }
 
 // --------------------------------------------------------------------- funds

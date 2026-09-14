@@ -1,6 +1,13 @@
 import { env } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, callJson, inviteAndAccept, signUpCoach, stubResend } from './_helpers';
+import {
+  call,
+  callJson,
+  inviteAndAccept,
+  signUpCoach,
+  stubResend,
+  whoami,
+} from './_helpers';
 
 beforeAll(() => {
   stubResend();
@@ -217,5 +224,235 @@ describe('tenancy isolation', () => {
     });
     expect(response.status).toBe(404);
     expect(response.body.error).toBe('source_not_found');
+  });
+});
+
+// ------------------------------------------------------- attachment fixtures
+
+/** ISO-10303-21 is a STEP file's first line. No magic bytes — just text. */
+const step = () => ascii('ISO-10303-21;\nHEADER;\nFILE_NAME("arm.step");\n');
+const stl = () => ascii('solid cube\n facet normal 0 0 1\nendsolid cube\n');
+const pdf = () => ascii('%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\n');
+
+function uploadFile(
+  cookie: string,
+  bytes: Uint8Array,
+  filename: string,
+): Promise<Response> {
+  return call('/api/media/files', {
+    method: 'POST',
+    cookie,
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'X-Filename': encodeURIComponent(filename),
+    },
+    body: bytes as unknown as BodyInit,
+  });
+}
+
+describe('attachment upload', () => {
+  it('stores a STEP file as opaque bytes under its own kind', async () => {
+    const cookie = await signUpCoach(7400);
+    const response = await uploadFile(cookie, step(), 'arm.step');
+    expect(response.status).toBe(201);
+
+    const body = (await response.json()) as { id: string; filename: string };
+    expect(body.filename).toBe('arm.step');
+
+    const row = await env.DB.prepare(
+      'SELECT kind, filename, content_type, width, height, r2_key FROM media WHERE id = ?',
+    )
+      .bind(body.id)
+      .first<{
+        kind: string;
+        filename: string;
+        content_type: string;
+        width: number | null;
+        height: number | null;
+        r2_key: string;
+      }>();
+
+    expect(row).toMatchObject({
+      kind: 'file',
+      filename: 'arm.step',
+      content_type: 'application/octet-stream',
+      width: null,
+      height: null,
+    });
+    // The key derives only from immutable ids plus the allowlisted extension —
+    // no part of the user's stem reaches a path.
+    expect(row?.r2_key).toMatch(/^teams\/[0-9a-f-]+\/[0-9a-f-]+\/[0-9a-f-]+\.step$/);
+  });
+
+  it('recognises a real PDF from its signature', async () => {
+    const cookie = await signUpCoach(7401);
+    const body = (await (await uploadFile(cookie, pdf(), 'sheet.pdf')).json()) as {
+      id: string;
+    };
+    const row = await env.DB.prepare('SELECT content_type FROM media WHERE id = ?')
+      .bind(body.id)
+      .first<{ content_type: string }>();
+    expect(row?.content_type).toBe('application/pdf');
+  });
+
+  it('refuses a .pdf whose bytes are not a PDF', async () => {
+    const cookie = await signUpCoach(7402);
+    const response = await uploadFile(cookie, ascii('<html>'), 'sheet.pdf');
+    expect(response.status).toBe(415);
+  });
+
+  /**
+   * The invariant that keeps a child's location out of R2.
+   *
+   * ingestFile never calls stripMetadata — it has no image container to splice.
+   * So a phone photo renamed to a CAD extension has to be refused outright, or
+   * this becomes a second upload path that stores GPS coordinates, and the
+   * nightly backup copies them forward forever.
+   */
+  it('refuses an image wearing a CAD extension, EXIF and all', async () => {
+    const cookie = await signUpCoach(7310);
+    const withExif = png(800, 600, [pngChunk('eXIf', ascii('GPS here'))]);
+
+    const response = await uploadFile(cookie, withExif, 'bracket.stl');
+    expect(response.status).toBe(415);
+
+    // Scoped to this team: the file suite shares one database, and earlier
+    // tests have legitimately stored attachments of their own.
+    const { team_id: teamId } = await whoami(cookie);
+    const stored = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM media WHERE kind = 'file' AND team_id = ?",
+    )
+      .bind(teamId)
+      .first<{ n: number }>();
+    expect(stored?.n).toBe(0);
+  });
+
+  /**
+   * The stored-XSS guard.
+   *
+   * Extension-only validation cannot tell a CAD file from an HTML page, so the
+   * bytes below WILL be stored. What must never happen is a browser rendering
+   * them as a document on this origin, where the script would run against a
+   * teammate's session.
+   */
+  it('serves a disguised HTML payload as an undisplayable download', async () => {
+    const cookie = await signUpCoach(7311);
+    const payload = ascii('<html><script>alert(document.cookie)</script></html>');
+
+    const created = await uploadFile(cookie, payload, 'bracket.stl');
+    expect(created.status).toBe(201);
+    const { id } = (await created.json()) as { id: string };
+
+    const served = await call(`/media/${id}`, { cookie });
+    expect(served.status).toBe(200);
+
+    const type = served.headers.get('Content-Type');
+    expect(type).toBe('application/octet-stream');
+    expect(type).not.toContain('text/html');
+
+    const disposition = served.headers.get('Content-Disposition') ?? '';
+    expect(disposition.startsWith('attachment')).toBe(true);
+    expect(disposition).not.toContain('inline');
+    expect(disposition).toContain('bracket.stl');
+
+    expect(served.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(served.headers.get('Content-Security-Policy')).toContain('sandbox');
+  });
+
+  it('serves a PDF as a download too, rather than inline', async () => {
+    const cookie = await signUpCoach(7312);
+    const { id } = (await (await uploadFile(cookie, pdf(), 'sheet.pdf')).json()) as {
+      id: string;
+    };
+    const served = await call(`/media/${id}`, { cookie });
+    expect(served.headers.get('Content-Type')).toBe('application/pdf');
+    expect(served.headers.get('Content-Disposition')?.startsWith('attachment')).toBe(
+      true,
+    );
+  });
+
+  it('refuses an extension that is not on the list', async () => {
+    const cookie = await signUpCoach(7320);
+    for (const name of ['payload.html', 'run.exe', 'icon.svg', 'bracket']) {
+      const response = await uploadFile(cookie, stl(), name);
+      expect(response.status).toBe(415);
+    }
+  });
+
+  it('requires a filename, and refuses an absurd one before decoding it', async () => {
+    const cookie = await signUpCoach(7321);
+
+    const missing = await call('/api/media/files', {
+      method: 'POST',
+      cookie,
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: stl() as unknown as BodyInit,
+    });
+    expect(missing.status).toBe(400);
+
+    const huge = await call('/api/media/files', {
+      method: 'POST',
+      cookie,
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Filename': 'a'.repeat(5000),
+      },
+      body: stl() as unknown as BodyInit,
+    });
+    expect(huge.status).toBe(400);
+  });
+
+  it('takes a 20MB file and refuses a 26MB one', async () => {
+    const cookie = await signUpCoach(7330);
+
+    const big = new Uint8Array(20 * 1024 * 1024);
+    big.set(stl(), 0);
+    expect((await uploadFile(cookie, big, 'assembly.sldasm')).status).toBe(201);
+
+    const tooBig = new Uint8Array(26 * 1024 * 1024);
+    tooBig.set(stl(), 0);
+    expect((await uploadFile(cookie, tooBig, 'huge.sldasm')).status).toBe(413);
+  });
+
+  /** The regression a carelessly widened MAX_BYTES would cause. */
+  it('leaves the image route at its own 10MB cap', async () => {
+    const cookie = await signUpCoach(7331);
+    const big = png(100, 100, [pngChunk('teXt', new Uint8Array(15 * 1024 * 1024))]);
+    expect((await upload(cookie, big)).status).toBe(413);
+  });
+
+  it('refuses a viewer, and still lets one download', async () => {
+    const coach = await signUpCoach(7340);
+    const viewer = await inviteAndAccept(coach, { role: 'viewer', handle: 'parent' });
+
+    expect((await uploadFile(viewer.cookie, stl(), 'arm.stl')).status).toBe(403);
+
+    const { id } = (await (await uploadFile(coach, stl(), 'arm.stl')).json()) as {
+      id: string;
+    };
+    // Attachments are the team's work product, not pictures of children — a
+    // sponsor or a parent may read them. Asserted so the decision is deliberate.
+    expect((await call(`/media/${id}`, { cookie: viewer.cookie })).status).toBe(200);
+  });
+
+  it('keeps attachments out of the photo library', async () => {
+    const cookie = await signUpCoach(7350);
+    await uploadFile(cookie, stl(), 'arm.stl');
+    await upload(cookie, png(400, 400));
+
+    const listed = await callJson<{ media: { kind: string }[] }>('/api/media', {
+      cookie,
+    });
+    expect(listed.body.media).toHaveLength(1);
+    expect(listed.body.media[0].kind).toBe('photo');
+  });
+
+  it('cannot be read across teams', async () => {
+    const teamA = await signUpCoach(7360);
+    const teamB = await signUpCoach(7361);
+    const { id } = (await (await uploadFile(teamA, step(), 'arm.step')).json()) as {
+      id: string;
+    };
+    expect((await call(`/media/${id}`, { cookie: teamB })).status).toBe(404);
   });
 });

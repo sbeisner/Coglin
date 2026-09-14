@@ -7,10 +7,11 @@
  * fact — it is the actual behaviour (migrations/0002_invites.sql), and saying so
  * is what makes the "no resend button" answer make sense later.
  */
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Check, Copy } from 'lucide-react';
 import * as api from '@/lib/api';
-import { SUB_TEAMS, type Role } from '@/types';
+import { type Role, type SubTeam } from '@/types';
+import { SubTeamPicker } from '@/components/SubTeamPicker';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -42,17 +43,30 @@ const ROLES: { id: InvitableRole; label: string }[] = [
 export function InviteDialog({ onInvited }: { onInvited: () => void }) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<InvitableRole>('student');
-  const [subTeams, setSubTeams] = useState<string[]>([]);
+  const [subTeams, setSubTeams] = useState<SubTeam[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<api.InviteResult | null>(null);
 
-  function reset() {
+  /**
+   * Clear the form when the dialog OPENS, not when it closes.
+   *
+   * Closing looked like the obvious place and was wrong. Radix only fires
+   * onOpenChange when the user dismisses the dialog — X, Esc, the overlay — not
+   * when a controlled consumer flips `open` itself, which is exactly what the
+   * "Done" button on the success screen does. So Done left `result` set, and the
+   * next "Invite someone" reopened straight onto the previous person's invite
+   * link with no way back to the form. Resetting on open cannot be bypassed by
+   * any close path, present or future.
+   */
+  useEffect(() => {
+    if (!open) return;
     setResult(null);
     setError(null);
     setSubTeams([]);
     setRole('student');
-  }
+    setPending(false);
+  }, [open]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -80,13 +94,7 @@ export function InviteDialog({ onInvited }: { onInvited: () => void }) {
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) reset();
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm">Invite someone</Button>
       </DialogTrigger>
@@ -142,35 +150,7 @@ export function InviteDialog({ onInvited }: { onInvited: () => void }) {
               </div>
 
               {role === 'student' && (
-                <fieldset className="space-y-2">
-                  <legend className="text-sm font-medium">Sub-teams</legend>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SUB_TEAMS.map((st) => {
-                      const on = subTeams.includes(st.id);
-                      return (
-                        <button
-                          key={st.id}
-                          type="button"
-                          aria-pressed={on}
-                          onClick={() =>
-                            setSubTeams((prev) =>
-                              on
-                                ? prev.filter((x) => x !== st.id)
-                                : [...prev, st.id],
-                            )
-                          }
-                          className={
-                            on
-                              ? 'bg-primary text-primary-foreground rounded-md px-2.5 py-1.5 text-xs'
-                              : 'bg-muted text-muted-foreground hover:bg-accent rounded-md px-2.5 py-1.5 text-xs'
-                          }
-                        >
-                          {st.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </fieldset>
+                <SubTeamPicker value={subTeams} onChange={setSubTeams} />
               )}
             </div>
 

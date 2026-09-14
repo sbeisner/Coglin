@@ -71,6 +71,25 @@ export function ReportBugDialog({
     if (open) setDiag(collectDiagnostics(`${pathname}${search}`));
   }, [open, pathname, search]);
 
+  /**
+   * Clear the form when the dialog OPENS, not when it closes.
+   *
+   * These resets used to live in the onOpenChange wrapper below, which Radix
+   * fires only for X / Esc / overlay — never when a controlled consumer flips
+   * `open` itself. "Done" on the success screen calls the onOpenChange PROP
+   * directly, skipping the wrapper, so `result` survived and the next press of
+   * the bug button reopened onto the previous report's confirmation. The effect
+   * above already re-snapshotted diagnostics on open, but the form holding them
+   * never rendered. Resetting on open is immune to which close path ran.
+   */
+  useEffect(() => {
+    if (!open) return;
+    setResult(null);
+    setError(null);
+    setKind('bug');
+    setPending(false);
+  }, [open]);
+
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
@@ -100,17 +119,7 @@ export function ReportBugDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) {
-          setResult(null);
-          setError(null);
-          setKind('bug');
-        }
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       {/* The tallest dialog in the app, and the one most likely to be opened on
           a phone held sideways in a pit. The shared DialogContent has no height
           bound, so without this the Send button ends up off-screen with no way

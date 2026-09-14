@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { ArrowLeft, Bookmark, BookmarkCheck } from 'lucide-react';
+import { ArrowLeft, Bookmark, BookmarkCheck, Minimize2, Projector } from 'lucide-react';
 import * as api from '@/lib/api';
 import { useAsync } from '@/lib/useAsync';
 import { useSession } from '@/lib/session';
@@ -10,8 +10,10 @@ import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/Skeleton';
 import { Button } from '@/components/ui/button';
+import { AgendaPanel } from '@/components/meetings/AgendaPanel';
 import { DocTree } from '@/components/notes/DocTree';
 import { SaveIndicator } from '@/components/notes/SaveIndicator';
+import { cn } from '@/lib/utils';
 import type { NoteDocSummary } from '@/types';
 
 /**
@@ -243,6 +245,62 @@ function DocPane({
   const editorApi = useRef<{ setContent: (content: string) => void } | null>(null);
   /** The body as the editor currently holds it, for Copy and for conflicts. */
   const latest = useRef<(() => string) | null>(null);
+  const [projecting, setProjecting] = useState(false);
+  const [agendaKey, setAgendaKey] = useState(0);
+  const meetingId = doc.data?.meeting_id ?? null;
+
+  /**
+   * The meeting's agenda, fetched only once the projector is on.
+   *
+   * Whether to OFFER the button needs no request — the document already carries
+   * meeting_id — so a page that nobody projects never pays for this.
+   */
+  const projected = useAsync(
+    () =>
+      projecting && meetingId
+        ? api.getMeeting(meetingId)
+        : Promise.resolve(null),
+    [projecting, meetingId, agendaKey],
+  );
+
+  /**
+   * Esc leaves, and so does the browser's own fullscreen exit.
+   *
+   * Both have to be watched or the two get out of step: pressing Esc in real
+   * fullscreen is handled by the browser, which fires fullscreenchange without
+   * ever sending a keydown, and leaving this component in a fixed overlay that
+   * now covers a perfectly ordinary page with no visible way out.
+   */
+  useEffect(() => {
+    if (!projecting) return;
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setProjecting(false);
+    };
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) setProjecting(false);
+    };
+
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+    };
+  }, [projecting]);
+
+  function enterProjection() {
+    setProjecting(true);
+    // Best effort. iOS Safari has no element fullscreen at all, and a rejected
+    // request must not stop the overlay — the overlay is the feature; real
+    // fullscreen is the bonus that also hides the browser's own chrome.
+    void document.documentElement.requestFullscreen?.().catch(() => undefined);
+  }
+
+  function exitProjection() {
+    setProjecting(false);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  }
 
   /**
    * The fetch is the starting point, not a subscription.
@@ -332,7 +390,57 @@ function DocPane({
   }
 
   return (
-    <div className="space-y-3">
+    /**
+     * Project mode is a CLASS SWITCH, not a different tree.
+     *
+     * The editor below must not be re-parented: DocEditor is keyed on docId, so
+     * remounting it re-seeds from the content that was fetched when the page
+     * opened — throwing away anything typed since that has not yet been saved.
+     * So the wrappers are always here and always in the same order, and the
+     * agenda slot renders `null` rather than disappearing, which keeps the
+     * editor at a stable position in the children array.
+     *
+     * z-40 puts this over the app's own sidebar and tab bar (z-30) while staying
+     * under a dialog (z-50).
+     */
+    <div
+      className={cn(
+        projecting &&
+          'bg-background fixed inset-0 z-40 overflow-y-auto px-6 py-6 md:px-10',
+      )}
+    >
+      <div
+        className={cn(
+          projecting &&
+            'mx-auto grid max-w-[110rem] items-start gap-8 md:grid-cols-[minmax(18rem,30%)_1fr]',
+        )}
+      >
+        {projecting ? (
+          <div className="note-project space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="u-eyebrow">
+                {projected.data?.meeting.title ?? 'Meeting'}
+              </span>
+              <Button size="sm" variant="outline" onClick={exitProjection}>
+                <Minimize2 className="size-4" aria-hidden />
+                Exit
+              </Button>
+            </div>
+            {projected.data ? (
+              <AgendaPanel
+                meetingId={projected.data.meeting.id}
+                agenda={projected.data.agenda}
+                canEdit={canEdit}
+                large
+                onChanged={() => setAgendaKey((k) => k + 1)}
+              />
+            ) : (
+              <Skeleton className="h-40" />
+            )}
+          </div>
+        ) : null}
+
+    <div className={cn('space-y-3', projecting && 'note-project')}>
       <Link
         to="/app/notes"
         className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1.5 text-sm md:hidden"
@@ -387,6 +495,15 @@ function DocPane({
           >
             {copied ? 'Copied' : 'Copy'}
           </Button>
+          {/* Only for a document that belongs to a meeting — the thing being
+              projected is the agenda beside the notes, and a standalone page has
+              no agenda to put next to it. */}
+          {meetingId && !projecting && (
+            <Button size="xs" variant="outline" onClick={enterProjection}>
+              <Projector className="size-4" aria-hidden />
+              Project
+            </Button>
+          )}
         </div>
       </div>
 
@@ -441,12 +558,15 @@ function DocPane({
           docId={docId}
           initialContent={doc.data.content}
           editable={canEdit}
+          allowFiles
           onChange={onChange}
           onReady={(instance) => {
             editorApi.current = instance;
           }}
         />
       </Suspense>
+    </div>
+      </div>
     </div>
   );
 }

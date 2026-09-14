@@ -57,9 +57,13 @@ async function sourceExists(
   // A soft-deleted document cannot be newly flagged either. An EXISTING flag on
   // one stays listed and says so — that rule lives in the inbox below, because
   // the flag was one person's decision and the delete was another person's.
+  // Named positively, not as "anything but a roster photo". The negative form
+  // meant every kind added later became flaggable evidence by default, which is
+  // how a CAD attachment (0013) would have silently turned into a portfolio
+  // candidate. A new kind should have to be let in, not have to be kept out.
   const extra =
     type === 'media'
-      ? " AND kind <> 'roster_photo'"
+      ? " AND kind IN ('photo', 'file')"
       : type === 'note_doc'
         ? ' AND deleted_at IS NULL'
         : '';

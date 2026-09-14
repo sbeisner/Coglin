@@ -20,6 +20,13 @@ import { useSession } from '@/lib/session';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   SUB_TEAMS,
   TASK_COLUMNS,
   type BoardOp,
@@ -36,8 +43,17 @@ import { DraggableTaskCard, TaskCard } from '@/components/board/TaskCard';
 import { TaskDialog } from '@/components/board/TaskDialog';
 import { cn } from '@/lib/utils';
 
-/** The lanes a team actually splits into, offered so nobody starts from blank. */
-const STARTER_BOARDS = ['Build', 'Programming', 'CAD', 'Outreach', 'Portfolio'];
+/**
+ * The lanes a team actually splits into, offered so nobody starts from blank.
+ *
+ * Derived from SUB_TEAMS rather than hand-listed, which fixes two things at
+ * once: the hand-listed version covered five of the seven sub-teams, so
+ * Business and Drive had no starter board at all; and every starter board was
+ * NAMED after a sub-team while carrying `sub_team: null`, because the button
+ * called createBoard with no second argument. The badge on the board header was
+ * therefore always empty on exactly the boards that most obviously had one.
+ */
+const STARTER_BOARDS = SUB_TEAMS;
 
 /**
  * Codes, not sentences, cross the api boundary — so the copy lives here.
@@ -385,15 +401,15 @@ export default function Boards() {
             action={
               canManage ? (
                 <div className="flex flex-wrap justify-center gap-2">
-                  {STARTER_BOARDS.map((name) => (
+                  {STARTER_BOARDS.map((st) => (
                     <Button
-                      key={name}
+                      key={st.id}
                       size="sm"
                       variant="outline"
                       disabled={pending}
-                      onClick={() => void createBoard(name)}
+                      onClick={() => void createBoard(st.label, st.id)}
                     >
-                      {name}
+                      {st.label}
                     </Button>
                   ))}
                 </div>
@@ -560,16 +576,36 @@ export default function Boards() {
   );
 }
 
+/** The "no sub-team" option. Select has no value for null, so it needs a token. */
+const NO_SUB_TEAM = '__none__';
+
 /** Inline "new board", so a sixth board is possible once the empty state is gone. */
 function NewBoard({
   disabled,
   onCreate,
 }: {
   disabled: boolean;
-  onCreate: (name: string) => Promise<void>;
+  onCreate: (name: string, subTeam?: SubTeam | null) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
+  // Pickable at creation, not only afterwards through the board's own settings
+  // dialog. The server has always accepted sub_team on POST /api/boards; there
+  // was simply no control here, so every hand-made board started unlabelled and
+  // most stayed that way.
+  const [subTeam, setSubTeam] = useState<string>(NO_SUB_TEAM);
+
+  function submit() {
+    if (!name.trim()) return;
+    void onCreate(
+      name.trim(),
+      subTeam === NO_SUB_TEAM ? null : (subTeam as SubTeam),
+    ).then(() => {
+      setName('');
+      setSubTeam(NO_SUB_TEAM);
+      setOpen(false);
+    });
+  }
 
   if (!open) {
     return (
@@ -598,17 +634,33 @@ function NewBoard({
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
-            if (name.trim()) {
-              void onCreate(name.trim()).then(() => {
-                setName('');
-                setOpen(false);
-              });
-            }
+            submit();
           }
           if (e.key === 'Escape') setOpen(false);
         }}
         className="min-h-9 w-40"
       />
+      <Select value={subTeam} onValueChange={setSubTeam} disabled={disabled}>
+        <SelectTrigger className="min-h-9 w-36" aria-label="Sub-team">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_SUB_TEAM}>No sub-team</SelectItem>
+          {SUB_TEAMS.map((st) => (
+            <SelectItem key={st.id} value={st.id}>
+              {st.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={disabled || name.trim() === ''}
+        onClick={submit}
+      >
+        Add
+      </Button>
       <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
         Cancel
       </Button>

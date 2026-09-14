@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { AgendaPanel } from '@/components/meetings/AgendaPanel';
 import { AttendancePanel } from '@/components/meetings/AttendancePanel';
 import { CoachActionItems } from '@/components/meetings/CoachActionItems';
 import { MEETING_KINDS } from '@/types';
@@ -197,23 +198,11 @@ export default function Meeting() {
       </div>
 
       <div className="space-y-6 px-4 py-6 md:px-8">
-        {agenda.length > 0 && (
-          <section>
-            <h2 className="u-eyebrow mb-3">Agenda</h2>
-            <ul className="bg-card border-border divide-border divide-y rounded-lg border">
-              {agenda.map((item) => (
-                <li key={item.id} className="px-4 py-3 text-sm">
-                  {item.title}
-                  {item.minutes_planned && (
-                    <span className="text-muted-foreground tabular ml-2 font-mono text-xs">
-                      {item.minutes_planned}m
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+        <AgendaPanel
+          meetingId={meeting.id}
+          agenda={agenda}
+          canEdit={canEdit}
+        />
 
         <section>
           <h2 className="u-eyebrow mb-3">Who was here</h2>
