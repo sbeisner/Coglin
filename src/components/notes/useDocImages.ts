@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Editor } from '@tiptap/react';
+import type { Content, Editor } from '@tiptap/react';
 import { UnsupportedImage, measure, prepareAndUpload } from '@/lib/upload';
 
 /**
@@ -129,25 +129,9 @@ export function useDocImages(editor: Editor | null) {
   const insert = useCallback(
     async (files: File[]) => {
       if (!editor) return;
-      for (const file of files) {
-        const uploadId = crypto.randomUUID();
-        const previewUrl = URL.createObjectURL(file);
-        // Measured and inserted FIRST, so the box is reserved at the right shape
-        // and the paragraphs below do not jump when the upload lands.
-        const size = await measure(file);
-        editor
-          .chain()
-          .focus()
-          .insertContent({
-            type: 'mediaImage',
-            attrs: {
-              uploadId,
-              width: size?.width ?? null,
-              height: size?.height ?? null,
-              alt: '',
-            },
-          })
-          .run();
+      const prepared = await prepareImages(files);
+      insertImageNodes(editor, prepared);
+      for (const { file, uploadId, previewUrl } of prepared) {
         void start(file, uploadId, previewUrl);
       }
     },
@@ -155,4 +139,79 @@ export function useDocImages(editor: Editor | null) {
   );
 
   return { insert };
+}
+
+export interface PreparedImage {
+  file: File;
+  uploadId: string;
+  previewUrl: string;
+  size: { width: number; height: number } | null;
+}
+
+/**
+ * Measure each picked photo and mint its upload id.
+ *
+ * Measured BEFORE insertion so the box is reserved at the right shape and the
+ * paragraphs below do not jump when the upload lands. Split from the insert
+ * below because `measure` needs createImageBitmap, which the worker test
+ * runtime does not have — the part worth a regression test is the other half.
+ */
+async function prepareImages(files: File[]): Promise<PreparedImage[]> {
+  return Promise.all(
+    files.map(async (file) => ({
+      file,
+      uploadId: crypto.randomUUID(),
+      previewUrl: URL.createObjectURL(file),
+      size: await measure(file),
+    })),
+  );
+}
+
+/** The narrow slice of Editor this needs, so a test can stub it without a DOM. */
+export interface InsertTarget {
+  chain: () => {
+    focus: () => { insertContent: (content: Content) => { run: () => void } };
+  };
+}
+
+/**
+ * Insert every picked photo, in ONE transaction.
+ *
+ * The obvious loop — insertContent once per file — silently kept only the LAST
+ * photo, which is the bug users reported as "you can only attach one image per
+ * note". `insertContent` replaces the CURRENT SELECTION, and after a block atom
+ * lands there is no text position after it to put the caret, so TipTap's
+ * selectionToInsertionEnd leaves a NodeSelection on the image it just inserted.
+ * The next iteration's from/to therefore span image one, and replaceWith
+ * overwrites it. Three photos in, one photo out.
+ *
+ * So the whole fragment goes in at once: there is no intermediate selection to
+ * clobber because there is no intermediate step. Exported, and covered by
+ * useDocImages.test.ts, because the failure was silent — no error, no warning,
+ * just two photos that never existed.
+ */
+export function insertImageNodes(
+  editor: InsertTarget,
+  prepared: PreparedImage[],
+): void {
+  if (prepared.length === 0) return;
+
+  const nodes = prepared.map(({ uploadId, size }) => ({
+    type: 'mediaImage',
+    attrs: {
+      uploadId,
+      width: size?.width ?? null,
+      height: size?.height ?? null,
+      alt: '',
+    },
+  }));
+
+  // A trailing paragraph, because insertContent consumes the empty one an
+  // untouched note starts with. Without it a photos-only document has no text
+  // position at all and the caret has nowhere to go.
+  editor
+    .chain()
+    .focus()
+    .insertContent([...nodes, { type: 'paragraph' }])
+    .run();
 }
