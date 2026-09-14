@@ -452,6 +452,18 @@
       margin-block: 0.5rem;
     }
 
+    /* Links, which until now were invisible.
+       StarterKit registers the Link extension unless it is passed link: false,
+       so autolink and openOnClick have been on the whole time — but Tailwind's
+       preflight sets `a { color: inherit; text-decoration: inherit }`, and
+       nothing here overrode it. A pasted URL was a working clickable target
+       that looked exactly like the sentence around it. */
+    :where(a) {
+      @apply text-primary-ink;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
     :where(ul) {
       list-style: disc;
       padding-inline-start: 1.5rem;
@@ -572,6 +584,31 @@
     ul[data-type='taskList'] > li > div > p {
       margin-block: 0;
     }
+  }
+
+  /* Projector scale.
+     A note on a shop wall gets read from across the room by somebody holding a
+     drill, so project mode scales the whole block rather than picking a font
+     size per element: every rule in .note-prose above is in rem or em, so one
+     font-size here moves headings, lists, code and the placeholder together and
+     keeps their relative weights intact.
+
+     Applied to the column WRAPPER, not to .note-prose, so the page title, the
+     agenda beside it and the save indicator grow with the body text — the point
+     is a readable screen, not a big paragraph next to small furniture. */
+  .note-project {
+    font-size: 1.3rem;
+    line-height: 1.5;
+  }
+
+  .note-project .u-eyebrow {
+    font-size: 0.8125rem;
+  }
+
+  /* The title input is set in a fixed text-2xl, which stops looking like a
+     heading once the body under it is 1.3rem. */
+  .note-project input.u-display {
+    font-size: 2.25rem;
   }
 }
 
