@@ -86,6 +86,26 @@ const ERROR_COPY: Record<string, string> = {
 };
 
 /**
+ * The same codes, answered for an attachment rather than a photo.
+ *
+ * A separate map because several of them mean something different here:
+ * file_too_large has a different limit and no "after shrinking it" to mention,
+ * and the unsupported case has to name formats rather than JPEG and PNG.
+ */
+const FILE_ERROR_COPY: Record<string, string> = {
+  file_too_large: 'That file is over the 25 MB limit.',
+  unsupported_file_type:
+    'Coglin can hold PDFs and CAD files — .pdf, .step, .stl, .f3d, .sldprt, .dwg and similar.',
+  image_not_a_file:
+    'That is a photo with a CAD file’s name. Use “Add a photo” for pictures.',
+  filename_required: 'That file has no name Coglin could read.',
+  filename_invalid: 'That file has no name Coglin could read.',
+  quota_exceeded: 'This season has used all its storage. A coach can clear space.',
+  no_current_season: 'This team has no current season yet.',
+  forbidden: 'You do not have permission to add files.',
+};
+
+/**
  * Upload, reporting progress.
  *
  * The only XMLHttpRequest in the codebase, and the reason is that `fetch` has
@@ -102,12 +122,26 @@ export function uploadImage(
    * upload paths becomes the one that forgot to strip EXIF.
    */
   url = '/api/media',
+  /**
+   * Attachments send their name here, because the body is raw bytes and there
+   * is no form field to put it in. Percent-encoded by the caller: headers are
+   * latin-1, and `Motörhalterung_v2.step` throws in setRequestHeader untouched.
+   */
+  options?: { filename?: string; copy?: Record<string, string>; fallback?: string },
 ): Promise<UploadedMedia> {
+  const copy = options?.copy ?? ERROR_COPY;
+  const fallback = options?.fallback ?? 'That photo could not be uploaded.';
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('POST', url);
     request.withCredentials = true;
+    // The server ignores this entirely for attachments and decides the stored
+    // type from the bytes and the extension (worker/lib/files.ts). Do not
+    // "fix" the server to trust it.
     request.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    if (options?.filename) {
+      request.setRequestHeader('X-Filename', encodeURIComponent(options.filename));
+    }
 
     request.upload.onprogress = (event) => {
       if (event.lengthComputable && onProgress) {
@@ -126,11 +160,11 @@ export function uploadImage(
       } catch {
         // A non-JSON body means something upstream failed; the status is enough.
       }
-      reject(new Error(ERROR_COPY[code] ?? 'That photo could not be uploaded.'));
+      reject(new Error(copy[code] ?? fallback));
     };
 
     request.onerror = () =>
-      reject(new Error('The connection dropped while uploading that photo.'));
+      reject(new Error('The connection dropped during the upload.'));
     request.onabort = () => reject(new Error('Upload cancelled.'));
 
     request.send(file);
@@ -186,4 +220,81 @@ export async function measure(
   } catch {
     return null;
   }
+}
+
+// ------------------------------------------------------------- attachments
+
+/**
+ * What can be attached to a note besides a photo, mirrored from the server.
+ *
+ * A mirror, not the authority: worker/lib/files.ts decides what is accepted, and
+ * this list exists only so the file picker filters sensibly and a wrong file can
+ * be refused before 25 MB crosses pit wifi. If the two ever disagree, the server
+ * wins and the user sees a 415.
+ */
+export const FILE_EXTENSIONS = [
+  'pdf',
+  'step',
+  'stp',
+  'stl',
+  'f3d',
+  'sldprt',
+  'sldasm',
+  'dwg',
+  'dxf',
+  '3mf',
+  'gcode',
+  'ipt',
+  'iam',
+] as const;
+
+/** The `accept` string for the attachment picker. */
+export const FILE_ACCEPT = FILE_EXTENSIONS.map((e) => `.${e}`).join(',');
+
+/** Server-side cap, mirrored so a huge assembly is refused before it uploads. */
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Distinct from UnsupportedImage, which stays exactly as it is — receipts and
+ * roster photos still depend on its message and on being able to tell "this
+ * browser cannot decode that" apart from "we do not accept that".
+ */
+export class UnsupportedFile extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UnsupportedFile';
+  }
+}
+
+export interface UploadedFile extends UploadedMedia {
+  filename: string;
+}
+
+/**
+ * Check and upload an attachment.
+ *
+ * Deliberately NOT routed through prepareAndUpload, whose entire contract and
+ * docstring is "downscale then upload". A CAD file has nothing to downscale and
+ * `createImageBitmap` would throw on it; sending one through the image path
+ * would mean weakening the guarantee the image path exists to make.
+ */
+export async function prepareFileAndUpload(
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadedFile> {
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  if (!(FILE_EXTENSIONS as readonly string[]).includes(extension)) {
+    throw new UnsupportedFile(
+      'Coglin can hold PDFs and CAD files. That is not one Coglin recognises.',
+    );
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    throw new UnsupportedFile('That file is over the 25 MB limit.');
+  }
+  const uploaded = await uploadImage(file, onProgress, '/api/media/files', {
+    filename: file.name,
+    copy: FILE_ERROR_COPY,
+    fallback: 'That file could not be uploaded.',
+  });
+  return uploaded as UploadedFile;
 }

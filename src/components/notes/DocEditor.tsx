@@ -5,9 +5,11 @@ import { textblockTypeInputRule } from '@tiptap/core';
 import { Heading } from '@tiptap/extension-heading';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Placeholder } from '@tiptap/extensions';
-import { ImagePlus } from 'lucide-react';
+import { ImagePlus, Paperclip } from 'lucide-react';
+import { MediaFile } from '@/components/notes/MediaFile';
 import { MediaImage } from '@/components/notes/MediaImage';
 import { useDocImages } from '@/components/notes/useDocImages';
+import { FILE_ACCEPT } from '@/lib/upload';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -34,6 +36,7 @@ export function DocEditor({
   editable,
   onChange,
   onReady,
+  allowFiles = false,
   placeholder = 'Start typing…',
 }: {
   docId: string;
@@ -53,6 +56,16 @@ export function DocEditor({
    * blank page is genuinely hard to start and the prompt is the help.
    */
   placeholder?: string;
+  /**
+   * Whether to offer non-image attachments. OFF by default, and on only for
+   * meeting notes.
+   *
+   * Not a global: the campaign pitch and the sponsor newsletter use this same
+   * editor, and a newsletter is copied out and mailed to a sponsor who is not a
+   * member — /media/:id would 401 for them. A broken image is confusing; a
+   * download chip that looks like it works and does not is worse.
+   */
+  allowFiles?: boolean;
 }) {
   const editor = useEditor(
     {
@@ -67,6 +80,7 @@ export function DocEditor({
           placeholder,
         }),
         MediaImage,
+        MediaFile,
         TaskList,
         TaskItem.configure({
           nested: true,
@@ -88,7 +102,8 @@ export function DocEditor({
     [docId],
   );
 
-  const images = useDocImages(editor);
+  const { insertImages, insertFiles } = useDocImages(editor);
+  const photoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -103,12 +118,20 @@ export function DocEditor({
     });
   }, [editor, onReady]);
 
+  const pickPhotos = useCallback(
+    (files: FileList | null) => {
+      if (!files || files.length === 0) return;
+      void insertImages(Array.from(files));
+    },
+    [insertImages],
+  );
+
   const pickFiles = useCallback(
     (files: FileList | null) => {
       if (!files || files.length === 0) return;
-      images.insert(Array.from(files));
+      insertFiles(Array.from(files));
     },
-    [images],
+    [insertFiles],
   );
 
   if (!editor) return null;
@@ -119,14 +142,17 @@ export function DocEditor({
 
       {editable && (
         <div className="mt-2 flex flex-wrap items-center gap-1">
+          {/* Two inputs, not one widened one. `accept="image/*"` is what gives
+              iOS the camera-and-photo-library picker; adding CAD extensions to
+              it degrades that into a generic file browser. */}
           <input
-            ref={fileInput}
+            ref={photoInput}
             type="file"
             accept="image/*"
             multiple
             className="sr-only"
             onChange={(event) => {
-              pickFiles(event.target.files);
+              pickPhotos(event.target.files);
               // Reset so picking the same photo twice still fires a change.
               event.target.value = '';
             }}
@@ -136,11 +162,37 @@ export function DocEditor({
             variant="ghost"
             size="sm"
             className="min-h-11 md:min-h-9"
-            onClick={() => fileInput.current?.click()}
+            onClick={() => photoInput.current?.click()}
           >
             <ImagePlus className="size-4" aria-hidden />
             Add a photo
           </Button>
+
+          {allowFiles && (
+            <>
+              <input
+                ref={fileInput}
+                type="file"
+                accept={FILE_ACCEPT}
+                multiple
+                className="sr-only"
+                onChange={(event) => {
+                  pickFiles(event.target.files);
+                  event.target.value = '';
+                }}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="min-h-11 md:min-h-9"
+                onClick={() => fileInput.current?.click()}
+              >
+                <Paperclip className="size-4" aria-hidden />
+                Attach a file
+              </Button>
+            </>
+          )}
         </div>
       )}
     </div>

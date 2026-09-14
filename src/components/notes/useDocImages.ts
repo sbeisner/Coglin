@@ -1,6 +1,13 @@
 import { useCallback } from 'react';
 import type { Content, Editor } from '@tiptap/react';
-import { UnsupportedImage, measure, prepareAndUpload } from '@/lib/upload';
+import {
+  UnsupportedFile,
+  UnsupportedImage,
+  measure,
+  prepareAndUpload,
+  prepareFileAndUpload,
+  type UploadedMedia,
+} from '@/lib/upload';
 
 /**
  * Getting a photo from a phone into a document.
@@ -18,7 +25,8 @@ import { UnsupportedImage, measure, prepareAndUpload } from '@/lib/upload';
 interface UploadState {
   status: 'uploading' | 'failed';
   progress: number;
-  previewUrl: string;
+  /** Absent for an attachment: a CAD file has no thumbnail to hold onto. */
+  previewUrl?: string;
   error?: string;
   retry: () => void;
 }
@@ -72,7 +80,10 @@ export function useDocImages(editor: Editor | null) {
       if (!editor) return;
       let found: number | null = null;
       editor.state.doc.descendants((node, pos) => {
-        if (node.type.name === 'mediaImage' && node.attrs.uploadId === uploadId) {
+        // Matched on uploadId alone, not on the node type. It is a UUID and no
+        // other node carries the attribute, and hardcoding 'mediaImage' here is
+        // what would silently break the moment a second kind of upload existed.
+        if (node.attrs.uploadId === uploadId) {
           found = pos;
           return false;
         }
@@ -89,8 +100,25 @@ export function useDocImages(editor: Editor | null) {
     [editor],
   );
 
+  /**
+   * Run one upload, whatever kind it is.
+   *
+   * The uploader is a parameter rather than a hardcoded call, so the
+   * progress / failure / retry state machine exists exactly once. Duplicating it
+   * for attachments is how Retry rots on one of the two paths.
+   */
   const start = useCallback(
-    async (file: File, uploadId: string, previewUrl: string) => {
+    (
+      file: File,
+      uploadId: string,
+      upload: (
+        file: File,
+        onProgress: (fraction: number) => void,
+      ) => Promise<UploadedMedia>,
+      previewUrl?: string,
+      /** Extra attrs to write onto the node once the id lands. */
+      extra?: (media: UploadedMedia) => Record<string, unknown>,
+    ) => {
       const run = async () => {
         setUpload(uploadId, {
           status: 'uploading',
@@ -99,12 +127,16 @@ export function useDocImages(editor: Editor | null) {
           retry: () => void run(),
         });
         try {
-          const media = await prepareAndUpload(file, (fraction) => {
+          const media = await upload(file, (fraction) => {
             const current = uploads.get(uploadId);
             if (current) setUpload(uploadId, { ...current, progress: fraction });
           });
-          patchNode(uploadId, { mediaId: media.id, uploadId: null });
-          URL.revokeObjectURL(previewUrl);
+          patchNode(uploadId, {
+            mediaId: media.id,
+            uploadId: null,
+            ...(extra?.(media) ?? {}),
+          });
+          if (previewUrl) URL.revokeObjectURL(previewUrl);
           setUpload(uploadId, null);
         } catch (error) {
           setUpload(uploadId, {
@@ -112,33 +144,58 @@ export function useDocImages(editor: Editor | null) {
             progress: 0,
             previewUrl,
             error:
-              error instanceof UnsupportedImage
+              error instanceof UnsupportedImage || error instanceof UnsupportedFile
                 ? error.message
                 : error instanceof Error
                   ? error.message
-                  : 'That photo could not be uploaded.',
+                  : 'That upload did not go through.',
             retry: () => void run(),
           });
         }
       };
-      await run();
+      void run();
     },
     [patchNode],
   );
 
-  const insert = useCallback(
+  const insertImages = useCallback(
     async (files: File[]) => {
       if (!editor) return;
       const prepared = await prepareImages(files);
       insertImageNodes(editor, prepared);
       for (const { file, uploadId, previewUrl } of prepared) {
-        void start(file, uploadId, previewUrl);
+        start(file, uploadId, prepareAndUpload, previewUrl);
       }
     },
     [editor, start],
   );
 
-  return { insert };
+  const insertFiles = useCallback(
+    (files: File[]) => {
+      if (!editor) return;
+      const prepared: PreparedFile[] = files.map((file) => ({
+        file,
+        uploadId: crypto.randomUUID(),
+        filename: file.name,
+        size: file.size,
+      }));
+      insertFileNodes(editor, prepared);
+      for (const { file, uploadId } of prepared) {
+        start(
+          file,
+          uploadId,
+          prepareFileAndUpload,
+          undefined,
+          // The node adopts the SERVER's sanitised name, so the chip and the
+          // media row cannot disagree about what the download is called.
+          (media) => ({ filename: (media as { filename?: string }).filename }),
+        );
+      }
+    },
+    [editor, start],
+  );
+
+  return { insertImages, insertFiles };
 }
 
 export interface PreparedImage {
@@ -209,6 +266,38 @@ export function insertImageNodes(
   // A trailing paragraph, because insertContent consumes the empty one an
   // untouched note starts with. Without it a photos-only document has no text
   // position at all and the caret has nowhere to go.
+  editor
+    .chain()
+    .focus()
+    .insertContent([...nodes, { type: 'paragraph' }])
+    .run();
+}
+
+export interface PreparedFile {
+  file: File;
+  uploadId: string;
+  filename: string;
+  size: number;
+}
+
+/**
+ * Insert every picked attachment, in ONE transaction.
+ *
+ * Same rule and same reason as insertImageNodes above: one insertContent call
+ * per file would have each chip replace the one before it. No measuring step,
+ * because a chip's height is fixed and there is no aspect box to reserve.
+ */
+export function insertFileNodes(
+  editor: InsertTarget,
+  prepared: PreparedFile[],
+): void {
+  if (prepared.length === 0) return;
+
+  const nodes = prepared.map(({ uploadId, filename, size }) => ({
+    type: 'mediaFile',
+    attrs: { uploadId, filename, size },
+  }));
+
   editor
     .chain()
     .focus()

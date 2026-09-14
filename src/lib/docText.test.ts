@@ -88,6 +88,48 @@ describe('toMarkdown', () => {
     expect(toMarkdown('not json')).toBe('');
     expect(toMarkdown('')).toBe('');
   });
+
+  it('keeps links, which used to be dropped on the way to the clipboard', () => {
+    const out = toMarkdown(
+      doc({
+        type: 'paragraph',
+        content: [
+          text('See '),
+          {
+            type: 'text',
+            text: 'the build log',
+            marks: [{ type: 'link', attrs: { href: 'https://example.com/log' } }],
+          },
+        ],
+      }),
+    );
+    expect(out).toContain('[the build log](https://example.com/log)');
+  });
+
+  it('leaves a bare autolinked URL alone rather than doubling it', () => {
+    // autolink marks the URL with itself as the href. `[url](url)` is noise.
+    const out = toMarkdown(
+      doc({
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text: 'https://example.com',
+            marks: [{ type: 'link', attrs: { href: 'https://example.com' } }],
+          },
+        ],
+      }),
+    );
+    expect(out).toContain('https://example.com');
+    expect(out).not.toContain('](');
+  });
+
+  it('names an attachment, which would otherwise vanish from a copied note', () => {
+    const out = toMarkdown(
+      doc({ type: 'mediaFile', attrs: { filename: 'arm_bracket.step' } }),
+    );
+    expect(out).toContain('(file: arm_bracket.step)');
+  });
 });
 
 const summary = (

@@ -558,6 +558,7 @@ function DocPane({
           docId={docId}
           initialContent={doc.data.content}
           editable={canEdit}
+          allowFiles
           onChange={onChange}
           onReady={(instance) => {
             editorApi.current = instance;

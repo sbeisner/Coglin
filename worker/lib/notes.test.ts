@@ -112,3 +112,62 @@ describe('parseContent', () => {
     expect('text' in result && result.text).toBe('');
   });
 });
+
+describe('attachment nodes', () => {
+  const doc = (...content: unknown[]) =>
+    JSON.stringify({ type: 'doc', content });
+
+  const file = (attrs: Record<string, unknown>) => ({ type: 'mediaFile', attrs });
+
+  it('accepts a well-formed attachment', () => {
+    const out = parseContent(
+      doc(file({ mediaId: 'abc', filename: 'arm.step', size: 2048, uploadId: null })),
+    );
+    expect('error' in out).toBe(false);
+  });
+
+  it('puts the filename into the text projection, so search can find it', () => {
+    // Unlike a photo, which contributes nothing — an attachment's name is
+    // usually the only searchable trace it leaves in the document.
+    const out = parseContent(doc(file({ filename: 'arm_bracket_v3.step' })));
+    expect('error' in out).toBe(false);
+    if (!('error' in out)) expect(out.text).toContain('arm_bracket_v3.step');
+  });
+
+  it('refuses a filename long enough to bloat the document', () => {
+    const out = parseContent(doc(file({ filename: 'a'.repeat(300) })));
+    expect(out).toEqual({ error: 'invalid_content' });
+  });
+
+  it('refuses a filename that is not text', () => {
+    expect(parseContent(doc(file({ filename: 42 })))).toEqual({
+      error: 'invalid_content',
+    });
+  });
+
+  it('refuses a nonsense size', () => {
+    expect(parseContent(doc(file({ size: -1 })))).toEqual({
+      error: 'invalid_content',
+    });
+    expect(parseContent(doc(file({ size: 999 * 1024 * 1024 })))).toEqual({
+      error: 'invalid_content',
+    });
+    expect(parseContent(doc(file({ size: 'big' })))).toEqual({
+      error: 'invalid_content',
+    });
+  });
+
+  it('refuses an overlong media id', () => {
+    expect(parseContent(doc(file({ mediaId: 'x'.repeat(100) })))).toEqual({
+      error: 'invalid_content',
+    });
+  });
+
+  it('leaves other nodes attribute-unchecked, as before', () => {
+    // The bound is deliberately narrow: only mediaFile, only its own attrs.
+    const out = parseContent(
+      doc({ type: 'heading', attrs: { level: 2, anything: 'x'.repeat(500) } }),
+    );
+    expect('error' in out).toBe(false);
+  });
+});
