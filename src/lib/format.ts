@@ -196,6 +196,18 @@ export function formatMonthTitle({ y, m }: CalendarMonth): string {
   });
 }
 
+/**
+ * "Sep" — a chart column's label. Short because nine of them share the width of
+ * a phone, and built from {y, m} rather than an epoch for formatMonthTitle's
+ * reason: the pair IS the month, so it cannot drift by a timezone.
+ */
+export function formatMonthAbbr({ y, m }: CalendarMonth): string {
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString(undefined, {
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
 /** "Tuesday, September 8" — a day cell's accessible name. */
 export function formatDayName(day: number): string {
   const y = Math.floor(day / 10000);

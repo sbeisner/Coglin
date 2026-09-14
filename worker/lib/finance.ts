@@ -7,6 +7,7 @@
  * are kept in sync by hand, for the reason `roles.ts` explains.
  */
 import type { MemberRow } from './tenancy';
+import { zonedTimeToEpoch } from './tz';
 
 /**
  * amount_cents is always positive; `kind` carries the sign. A signed amount
@@ -136,4 +137,72 @@ export function canApproveOrders(member: MemberRow): boolean {
   if (member.role === 'viewer') return false;
   if (member.role === 'coach' || member.role === 'mentor') return true;
   return member.is_purchase_approver === 1;
+}
+
+// ------------------------------------------------------------ season months
+
+/** Upper bound on the columns one series may carry. See seasonMonths. */
+export const MAX_SERIES_MONTHS = 24;
+
+/** One month of a season, as a local calendar month plus the epoch it opens. */
+export interface MonthSlot {
+  y: number;
+  m: number;
+  /** Epoch seconds of local midnight on the 1st, in the team's zone. */
+  start: number;
+}
+
+/**
+ * A season's months, in the team's zone.
+ *
+ * Deliberately NOT `strftime('%Y-%m', occurred_at, 'unixepoch')`. That buckets
+ * in UTC, so a receipt entered at 8pm EDT on Oct 31 books to November and the
+ * cash-flow chart shows a column of money the team spent in a different month.
+ * lib/tz.ts is the authority for this whole class of bug, and its header
+ * documents the DST failure it exists to prevent.
+ *
+ * Each month is resolved INDEPENDENTLY from (y, m, 1, 00:00, tz) rather than by
+ * adding 30 days to the previous one — the gap between two local midnights is
+ * not constant, which is rule 1 in lib/tz.ts.
+ *
+ * Note the deliberate split: the RANGE of months is read in UTC, the BOUNDARY
+ * of each one in the team's zone. seasons.starts_at is authored as
+ * `Date.UTC(y, 8, 1)` (auth.ts currentSeason: the FTC season is Sept 1-May 31),
+ * so Sept 1 UTC is Aug 31 8pm in New York — reading the range locally would
+ * prepend an August column that can never hold anything. Reading it in UTC
+ * matches how the row was written and yields the nine months a team would name.
+ * The boundaries still have to be local midnights, or a transaction lands in
+ * the wrong column, so a line dated in that Aug 31 sliver folds into September
+ * via the ladder's leading edge-catch.
+ *
+ * The `{y, m}` ride along so the client can label a column from the same pair
+ * that defined it. Re-deriving the month from an epoch in the browser is what
+ * makes a label disagree with the column it sits under.
+ */
+export function seasonMonths(
+  startsAt: number,
+  endsAt: number,
+  tz: string,
+): MonthSlot[] {
+  const from = new Date(startsAt * 1000);
+  const to = new Date(Math.max(startsAt, endsAt) * 1000);
+  const lastY = to.getUTCFullYear();
+  const lastM = to.getUTCMonth() + 1;
+
+  const slots: MonthSlot[] = [];
+  let y = from.getUTCFullYear();
+  let m = from.getUTCMonth() + 1;
+  // A season is ~9 months. The cap is a guard against a mis-entered ends_at
+  // decades out turning one request into a thousand-branch CASE ladder.
+  while (slots.length < MAX_SERIES_MONTHS) {
+    slots.push({ y, m, start: zonedTimeToEpoch(y, m, 1, 0, 0, tz) });
+    if (y === lastY && m === lastM) break;
+    if (m === 12) {
+      y += 1;
+      m = 1;
+    } else {
+      m += 1;
+    }
+  }
+  return slots;
 }

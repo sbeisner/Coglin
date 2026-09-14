@@ -52,6 +52,7 @@ import type {
   OpenActionItem,
   MeetingKind,
   MeetingSeries,
+  FinanceBreakdown,
   FinanceSummary,
   Fund,
   FundsResponse,
@@ -822,6 +823,11 @@ export function deleteReceipt(
 
 export function financeSummary(): Promise<FinanceSummary> {
   return get<FinanceSummary>('/api/finance/summary');
+}
+
+/** The overview's category rollup and month series. See FinanceBreakdown. */
+export function financeBreakdown(): Promise<FinanceBreakdown> {
+  return get<FinanceBreakdown>('/api/finance/breakdown');
 }
 
 export function listPartOrders(): Promise<PartOrder[]> {
