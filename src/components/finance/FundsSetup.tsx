@@ -13,7 +13,7 @@
  * The copy says plainly that these become ledger lines. A balance appearing
  * from nowhere is a balance nobody trusts six months later.
  */
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import * as api from '@/lib/api';
 import { parseDollars } from '@/lib/format';
@@ -62,6 +62,18 @@ export function FundsSetup({
   const [rows, setRows] = useState<ExpiringRow[]>([emptyRow()]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset on OPEN, the same convention TransactionDialog uses. Nothing cleared
+  // this dialog on close, so a season's opening balances typed and then dismissed
+  // came back on the next open — stale numbers sitting in a form whose whole job
+  // is to be submitted once.
+  useEffect(() => {
+    if (!open) return;
+    setReserve('');
+    setRows([emptyRow()]);
+    setError(null);
+    setPending(false);
+  }, [open]);
 
   const reserveCents = reserve.trim() === '' ? null : parseDollars(reserve);
   const reserveValid = reserve.trim() === '' || reserveCents !== null;
