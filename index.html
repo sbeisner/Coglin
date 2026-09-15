@@ -49,6 +49,20 @@
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
       } catch (e) {}
     </script>
+
+    <!-- Decides, before first paint, whether the header offers "Open Coglin" or
+         "Sign in". The session cookie is HttpOnly so nothing here can verify
+         anything — this is a display guess, and index.css picks between two
+         branches that are BOTH always rendered, which is what keeps it clear of
+         hydration. Mirrors SESSION_HINT_BOOT_SCRIPT in src/lib/sessionHint.ts —
+         edit both together. -->
+    <script>
+      try {
+        var h = localStorage.getItem('coglin.session-hint');
+        if (h && h.slice(0, 3) === 'in:' && Number(h.slice(3)) > Date.now())
+          document.documentElement.dataset.sessionHint = 'in';
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

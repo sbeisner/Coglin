@@ -48,6 +48,29 @@ function RequireSession() {
 }
 
 /**
+ * Shown on /login while this browser's guess says the visitor is already signed
+ * in and /api/auth/me has not answered yet.
+ *
+ * Deliberately not a bare spinner: the thing the blank frame failed to say was
+ * "we recognise you". If the guess turns out to be wrong, SessionProvider drops
+ * the attribute and the CSS in index.css reveals the form underneath — no
+ * navigation, so no chance of a redirect loop.
+ */
+function ResumingSession() {
+  return (
+    <div className="bg-background flex min-h-dvh items-center justify-center px-4 py-12">
+      <div className="w-full max-w-sm">
+        <div className="mb-4 flex items-center gap-3">
+          <span className="u-bar h-8 w-1.5 shrink-0" aria-hidden />
+          <h1 className="u-display text-2xl leading-none">Coglin</h1>
+        </div>
+        <p className="text-muted-foreground text-sm">Opening Coglin…</p>
+      </div>
+    </div>
+  );
+}
+
+/**
  * The mirror of RequireSession, for /login and /signup.
  *
  * Without it a signed-in user who navigates to the sign-in page — by habit, by
@@ -55,12 +78,26 @@ function RequireSession() {
  * already using. There is no error and no way forward that looks different from
  * what they just did, so the honest reading is "it didn't work", and they try
  * again. Sending them to the app instead makes the state legible.
+ *
+ * `loading` used to return null, which was a worse version of the same problem
+ * it was written to solve: /login is reached by a full page load often enough
+ * (any click on the header before React hydrates), and a blank screen for the
+ * length of a cold /api/auth/me also reads as "it didn't work". Both
+ * non-authenticated states now render the same tree, and which half is visible
+ * is decided by CSS from the pre-paint attribute — so the markup here is a pure
+ * function of the route and hydrates cleanly against the prerendered /login.
  */
 function RedirectIfSignedIn({ children }: { children: ReactNode }) {
   const { status } = useSessionState();
-  if (status === 'loading') return null;
   if (status === 'authenticated') return <Navigate to="/app" replace />;
-  return <>{children}</>;
+  return (
+    <>
+      <div className="session-in-only">
+        <ResumingSession />
+      </div>
+      <div className="session-out-only">{children}</div>
+    </>
+  );
 }
 
 /**
