@@ -20,10 +20,15 @@
  *
  * `vite build --config vite.ssr.config.ts` compiles src/entry-server.tsx to a
  * Node-loadable bundle,
- * this renders each route in PAGES, and the markup plus per-route <head> tags
- * are written into dist/client/<route>/index.html. Cloudflare's static assets
+ * this renders each route in PRERENDER, and the markup plus per-route <head>
+ * tags are written into dist/client/<route>.html. Cloudflare's static assets
  * serve those directly; anything not prerendered still falls through to the SPA
  * shell, which is what /app/* and /invite/:token rely on.
+ *
+ * PRERENDER is PAGES plus the noindex SHELL_PAGES (/login, /signup). Those are
+ * here for a different reason than SEO: the SPA fallback serves index.html —
+ * the LANDING page — for anything unprerendered, so a full page load of /login
+ * painted the landing page, hydrated against the wrong markup, and went blank.
  *
  * The client hydrates rather than remounts — see the note in src/main.tsx.
  *
@@ -50,7 +55,7 @@ execFileSync('npx', ['vite', 'build', '--config', 'vite.ssr.config.ts', '--logLe
 });
 
 const bundle = pathToFileURL(join(process.cwd(), SSR_OUT, 'entry-server.js')).href;
-const { render, PAGES, ORIGIN, SITE_NAME } = await import(bundle);
+const { render, PAGES, PRERENDER, ORIGIN, SITE_NAME } = await import(bundle);
 
 const template = readFileSync(join(CLIENT, 'index.html'), 'utf8');
 
@@ -60,6 +65,16 @@ function escapeAttr(s) {
 
 function headFor(page) {
   const url = `${ORIGIN}${page.path}`;
+  // A noindex page gets a title and a description so a human sees the right tab
+  // and nothing else. No canonical (there is no indexable version to point at)
+  // and no og/twitter block (a sign-in form is not a link preview worth having).
+  if (page.noindex) {
+    return [
+      `<title>${escapeAttr(page.title)}</title>`,
+      `<meta name="description" content="${escapeAttr(page.description)}" />`,
+      `<meta name="robots" content="noindex" />`,
+    ].join('\n    ');
+  }
   return [
     `<title>${escapeAttr(page.title)}</title>`,
     `<meta name="description" content="${escapeAttr(page.description)}" />`,
@@ -75,17 +90,56 @@ function headFor(page) {
   ].join('\n    ');
 }
 
+/**
+ * Fail the build rather than ship a page that renders to nothing useful.
+ *
+ * In the spirit of this file's own "it is not optional" note above: a prerender
+ * regression is silent at runtime and expensive in the wild, and this is the one
+ * moment it is cheap to catch. The two named checks are the specific regressions
+ * this step was extended to prevent — restoring `return null` in
+ * RedirectIfSignedIn would empty /login, and restoring the `signedIn ? … : …`
+ * ternary in MarketingShell would drop one of the two header CTAs that the
+ * pre-hydration CSS in index.css chooses between.
+ */
+const MUST_CONTAIN = {
+  '/login': ['<form'],
+  '/signup': ['<form'],
+  '/': ['Open Coglin', 'Sign in'],
+};
+
+function assertRendered(page, html) {
+  if (html.trim().length < 500) {
+    console.error(`\n${page.path} rendered ${html.trim().length} chars — that is not a page.`);
+    process.exit(1);
+  }
+  for (const needle of MUST_CONTAIN[page.path] ?? []) {
+    if (!html.includes(needle)) {
+      console.error(`\n${page.path} is missing ${JSON.stringify(needle)}.`);
+      process.exit(1);
+    }
+  }
+}
+
 let written = 0;
-for (const page of PAGES) {
+for (const page of PRERENDER) {
   const html = render(page.path);
+  assertRendered(page, html);
   const out = template
     // The template's <head> carries the placeholder tags from index.html; strip
     // them so a page never ships two titles or two canonicals.
+    //
+    // `<meta\s+`, not `<meta `: prettier wraps the long tags in index.html onto
+    // their own lines, so the attribute is preceded by a newline and two spaces,
+    // and a literal space matched none of them. Every prerendered page has been
+    // shipping two <meta name="description"> and two og:title tags since COG-050
+    // because of it — visible in production with
+    // `curl -s .../features | grep -c 'name="description"'` returning 2. The
+    // stripping is also global now: there is more than one of each to remove.
     .replace(/<title>[\s\S]*?<\/title>/, '<!--head-->')
-    .replace(/\s*<meta name="description"[\s\S]*?\/>/, '')
-    .replace(/\s*<link rel="canonical"[^>]*>/, '')
-    .replace(/\s*<meta property="og:[\s\S]*?\/>/g, '')
-    .replace(/\s*<meta name="twitter:[\s\S]*?\/>/g, '')
+    .replace(/\s*<meta\s+name="description"[\s\S]*?\/>/g, '')
+    .replace(/\s*<link\s+rel="canonical"[^>]*>/g, '')
+    .replace(/\s*<meta\s+property="og:[\s\S]*?\/>/g, '')
+    .replace(/\s*<meta\s+name="twitter:[\s\S]*?\/>/g, '')
     .replace('<!--head-->', headFor(page))
     .replace('<div id="root"></div>', `<div id="root">${html}</div>`);
 
@@ -100,8 +154,9 @@ for (const page of PAGES) {
   console.error(`  prerendered ${page.path}`);
 }
 
-// The sitemap is generated from the same list, so it cannot list a page that
-// does not exist or miss one that does.
+// The sitemap is generated from PAGES, not PRERENDER, so it cannot list a page
+// that does not exist, miss one that does, or advertise a noindex page like
+// /login to a crawler.
 const now = new Date().toISOString().slice(0, 10);
 writeFileSync(
   join(CLIENT, 'sitemap.xml'),

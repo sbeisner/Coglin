@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { Bug, Menu } from 'lucide-react';
 import { NAV } from '@/lib/nav';
@@ -61,6 +61,20 @@ export function AppShell() {
   const location = useLocation();
   const current = navItemFor(location.pathname);
   const { team } = useSession();
+
+  /**
+   * Own the tab title inside the app, the way useRouteMeta does for marketing.
+   *
+   * Nothing under /app set it before, so the app inherited whatever title the
+   * document happened to load with. That used to be the landing page's, because
+   * every unprerendered path was served index.html; now /login is prerendered,
+   * so a coach arriving by way of the sign-in screen sat on their dashboard
+   * under a tab reading "Sign in — Coglin". Neither is right, and the section
+   * name is already computed one line up.
+   */
+  useEffect(() => {
+    document.title = current ? `${current.label} — Coglin` : 'Coglin';
+  }, [current]);
 
   return (
     <div className="bg-background min-h-dvh md:flex">

@@ -12,4 +12,11 @@ Disallow: /invite/
 Disallow: /reset/
 Disallow: /forgot
 
+# /login and /signup are deliberately NOT disallowed, however tempting it looks
+# next to the lines above. They are prerendered (src/marketing/seo.ts) and carry
+# <meta name="robots" content="noindex">, and a crawler that is not allowed to
+# FETCH a page never sees that tag — which is the standard way to end up indexed
+# with no snippet instead of not indexed at all. Disallow hides the page from the
+# crawler; noindex hides it from the index. These two want the second one.
+
 Sitemap: https://coglin.lilithforge.com/sitemap.xml
