@@ -5,6 +5,7 @@ import { useAsync } from '@/lib/useAsync';
 import { useSession } from '@/lib/session';
 import { InviteDialog } from '@/components/InviteDialog';
 import { MemberEditDialog } from '@/components/MemberEditDialog';
+import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
 import { RosterPhoto } from '@/components/RosterPhoto';
 import { PageHeader } from '@/components/PageHeader';
 import { Skeleton } from '@/components/Skeleton';
@@ -23,9 +24,25 @@ export default function Roster() {
   // rather than hand-patching local state with a member who does not exist yet.
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState<Member | null>(null);
+  const [resetting, setResetting] = useState<Member | null>(null);
   const members = useAsync(api.listMembers, [reloadKey]);
   const { member: me } = useSession();
   const canInvite = me.role === 'coach' || me.role === 'mentor';
+
+  /**
+   * Whether the row currently open in the edit dialog may have its password
+   * reset, mirroring the server's rule so the button is never offered where it
+   * would come back 403: a mentor may reset a student or a viewer, only a coach
+   * may reset another adult, and nobody resets their own row — they are signed
+   * in, so Settings is the shorter path.
+   */
+  const mayResetEditing =
+    editing !== null &&
+    canInvite &&
+    editing.id !== me.id &&
+    (me.role === 'coach' ||
+      editing.role === 'student' ||
+      editing.role === 'viewer');
   const list = members.data ?? [];
   const students = list.filter((m) => m.role === 'student');
   const adults = list.filter((m) => m.role !== 'student');
@@ -142,10 +159,27 @@ export default function Roster() {
       <MemberEditDialog
         member={editing}
         canChangeRole={me.role === 'coach'}
+        onResetPassword={
+          mayResetEditing
+            ? (m) => {
+                // Siblings, not nested: stacked Radix dialogs trap focus in the
+                // wrong layer, so Esc would close the wrong one.
+                setEditing(null);
+                setResetting(m);
+              }
+            : undefined
+        }
         onOpenChange={(open) => {
           if (!open) setEditing(null);
         }}
         onChanged={() => setReloadKey((k) => k + 1)}
+      />
+
+      <ResetPasswordDialog
+        member={resetting}
+        onOpenChange={(open) => {
+          if (!open) setResetting(null);
+        }}
       />
     </>
   );

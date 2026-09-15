@@ -6,6 +6,7 @@ import {
   Megaphone,
   MessagesSquare,
   NotebookPen,
+  Settings,
   Trophy,
   Users,
 } from 'lucide-react';
@@ -45,4 +46,7 @@ export const NAV: NavItem[] = [
   // grew past "budget lines" into the team's money generally, and sponsorship
   // campaigns land here next. The /app/budget path still redirects in App.tsx.
   { to: '/app/finance', label: 'Finance', icon: Coins },
+  // Last, and not `primary`: the mobile tab bar is grid-cols-4 and a fifth
+  // primary item wraps under <main>'s padding. See the note in AppShell.
+  { to: '/app/settings', label: 'Settings', icon: Settings },
 ];

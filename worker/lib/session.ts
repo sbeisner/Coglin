@@ -108,3 +108,41 @@ export async function destroySession(
   const id = await tokenId(token, env.SESSION_PEPPER);
   await env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(id).run();
 }
+
+/**
+ * Evict every session an account has (COG-051).
+ *
+ * Used when a password is reset through a mailed link. A forgotten password is
+ * indistinguishable from a shared one — the student who cannot get in may be
+ * locked out because somebody else changed it — so the reset is exactly the
+ * moment to throw everyone out, including whoever is redeeming. They get a
+ * fresh cookie from `createSession` a line later.
+ */
+export async function destroyAllSessions(
+  env: Bindings,
+  userId: string,
+): Promise<void> {
+  await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?')
+    .bind(userId)
+    .run();
+}
+
+/**
+ * Evict every session EXCEPT the caller's own.
+ *
+ * The change-password case. Somebody who deliberately changes their password in
+ * Settings wants the school computer they forgot to sign out of to go away; they
+ * do not want the tab they are typing in to go away, which reads as the change
+ * having failed. A caller with no cookie clears nothing.
+ */
+export async function destroyOtherSessions(
+  request: Request,
+  env: Bindings,
+  userId: string,
+): Promise<void> {
+  const token = readCookie(request, COOKIE_NAME);
+  const keep = token ? await tokenId(token, env.SESSION_PEPPER) : '';
+  await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?')
+    .bind(userId, keep)
+    .run();
+}

@@ -155,6 +155,140 @@ export async function sendInvite(
   }
 }
 
+export interface PasswordResetMail {
+  /** Recipient. Transient — see the file header. */
+  to: string;
+  /** Whose account this resets, so the mail names a person and not an account. */
+  displayName: string;
+  teamNumber: number;
+  teamName: string;
+  /** Set when a coach pressed the button; absent for a self-serve request. */
+  requestedBy?: string;
+  url: string;
+  expiresInHours: number;
+}
+
+/**
+ * The reset mail (COG-051).
+ *
+ * Plainer than the invite, and for a sharper reason. "Someone has requested a
+ * password reset, click here" is the single most-imitated phishing template
+ * there is, and this one lands in a 14-year-old's inbox. Naming the team, the
+ * person, and the coach who asked for it is what separates it from the fake —
+ * a phisher blasting addresses knows none of those. No images, no tracking
+ * pixel, one link.
+ *
+ * WHAT IS DELIBERATELY NOT IN HERE: the member's handle. For a student the
+ * address was typed into a dialog seconds earlier and nothing verified it, so a
+ * fat-fingered domain sends this to a stranger. Team and display name are the
+ * price of looking legitimate; pairing them with the username would hand over a
+ * working half of a credential. The handle is shown on the reset screen
+ * instead, which requires the token.
+ */
+function renderReset(mail: PasswordResetMail): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const team = `${mail.teamNumber} ${mail.teamName}`;
+  const subject = `Reset your Coglin password for ${team}`;
+  const safeUrl = escapeHtml(mail.url);
+  const asked = mail.requestedBy
+    ? `${mail.requestedBy} asked us to send this.`
+    : 'You asked us to send this.';
+  const hours = mail.expiresInHours === 1 ? '1 hour' : `${mail.expiresInHours} hours`;
+
+  const text = [
+    `Reset the Coglin password for ${mail.displayName} on ${team}.`,
+    '',
+    asked,
+    '',
+    'Open this link to choose a new password:',
+    mail.url,
+    '',
+    `The link works once and expires in ${hours}.`,
+    '',
+    "If you weren't expecting this, you can ignore this email — nothing changes",
+    'until the link is opened and a new password is set.',
+    '',
+    'Coglin is not affiliated with or endorsed by FIRST®.',
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#f4f7f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#16201a;">
+    <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">
+      <p style="margin:0 0 16px;font-size:18px;line-height:1.5;">
+        Reset the Coglin password for
+        <strong>${escapeHtml(mail.displayName)}</strong> on
+        <strong>${escapeHtml(team)}</strong>.
+      </p>
+      <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#4e5a52;">
+        ${escapeHtml(asked)} Open the link below to choose a new password.
+      </p>
+      <p style="margin:0 0 24px;">
+        <a href="${safeUrl}" style="display:inline-block;background:#4fce74;color:#05190d;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:15px;">
+          Choose a new password
+        </a>
+      </p>
+      <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#6f7a72;">
+        Or paste this into your browser:<br />
+        <span style="word-break:break-all;">${safeUrl}</span>
+      </p>
+      <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#6f7a72;">
+        The link works once and expires in ${hours}. If you weren't expecting
+        this, you can ignore this email — nothing changes until the link is
+        opened and a new password is set.
+      </p>
+      <p style="margin:24px 0 0;font-size:12px;color:#9aa39c;">
+        Coglin is not affiliated with or endorsed by FIRST®.
+      </p>
+    </div>
+  </body>
+</html>`;
+
+  return { subject, html, text };
+}
+
+/**
+ * Same contract as `sendInvite`: returns whether the send succeeded, never
+ * throws, and never logs the recipient. The reset row is committed before this
+ * runs and the coach-initiated path still shows a copyable link, so a mail
+ * failure degrades the result rather than failing the operation.
+ */
+export async function sendPasswordReset(
+  env: Bindings,
+  mail: PasswordResetMail,
+): Promise<boolean> {
+  if (!env.RESEND_API_KEY) return false;
+
+  const { subject, html, text } = renderReset(mail);
+
+  try {
+    const response = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from: FROM, to: [mail.to], subject, html, text }),
+    });
+
+    if (!response.ok) {
+      // Status only — Resend quotes the recipient back in its error bodies.
+      console.error(`reset email rejected by Resend: HTTP ${response.status}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error(
+      'reset email send failed:',
+      err instanceof Error ? err.name : 'unknown',
+    );
+    return false;
+  }
+}
+
 /**
  * Operator alert: a new team just signed up (COG-041, alert slice).
  *

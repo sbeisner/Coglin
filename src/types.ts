@@ -86,6 +86,16 @@ export interface Member {
    * treasurer. Mirrors is_purchase_approver in worker/lib/finance.ts.
    */
   is_purchase_approver: boolean;
+  /**
+   * Whether this account has an email address on file — never the address.
+   *
+   * Only the coach who registered the team has one; everyone who arrived by
+   * invite is NULL by construction (see migrations/0002_invites.sql). The reset
+   * dialog needs it to pick between "type where to send this" and "we'll mail
+   * the address on file", and the server uses the same fact to refuse a typed
+   * address for an account that has one.
+   */
+  has_email: boolean;
   created_at: number;
 }
 

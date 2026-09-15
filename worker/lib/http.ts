@@ -52,3 +52,19 @@ export function boundedInt(
   if (value < min || value > max) return null;
   return value;
 }
+
+/**
+ * The origin to build user-facing links against (invites, password resets).
+ *
+ * `APP_BASE_URL` is configured per environment; the request origin is the
+ * fallback so local dev and preview deployments produce links that actually
+ * resolve. Was private to `routes/invites.ts` until password recovery needed
+ * the same answer — two callers minting links from different origins would be
+ * a genuinely confusing bug to chase.
+ */
+export function appBaseUrl(c: {
+  env: { APP_BASE_URL?: string };
+  req: { url: string };
+}): string {
+  return c.env.APP_BASE_URL ?? new URL(c.req.url).origin;
+}

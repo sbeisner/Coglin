@@ -12,6 +12,7 @@
  */
 import { Hono } from 'hono';
 import { hashPassword, nowSeconds, randomToken, tokenId, uuid } from '../lib/crypto';
+import { appBaseUrl } from '../lib/http';
 import { createSession } from '../lib/session';
 import { sendInvite } from '../lib/email';
 import {
@@ -31,10 +32,6 @@ const INVITE_TTL = 60 * 60 * 24 * INVITE_TTL_DAYS;
 /** Pending invites a team may hold at once. FTC caps rosters at 15 students,
  *  so this is generous for a real team and still bounds a runaway loop. */
 const MAX_PENDING = 40;
-
-function baseUrl(c: { env: { APP_BASE_URL?: string }; req: { url: string } }): string {
-  return c.env.APP_BASE_URL ?? new URL(c.req.url).origin;
-}
 
 /**
  * Create and send an invite. Coach or mentor only — this route can add people
@@ -101,7 +98,7 @@ invites.post('/', sameOriginOnly, requireMember, requireRole('coach', 'mentor'),
     )
     .run();
 
-  const url = `${baseUrl(c)}/invite/${token}`;
+  const url = `${appBaseUrl(c)}/invite/${token}`;
 
   // Mail after the row is committed, so a mail outage still leaves the coach a
   // working link to share by hand.
