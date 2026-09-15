@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { auth } from './routes/auth';
 import { invites } from './routes/invites';
+import { passwords } from './routes/passwords';
 import { bugs } from './routes/bugs';
 import { team } from './routes/team';
 import { boards } from './routes/boards';
@@ -75,6 +76,11 @@ app.get('/api/health', async (c) => {
 });
 
 app.route('/api/auth', auth);
+// Second router on the same prefix, the way `meetingNotes` and `meetings` share
+// /api/meetings. The paths are disjoint from auth's (login, logout, me,
+// coach-signup), and mounting here keeps the whole feature above the bare-path
+// routers further down.
+app.route('/api/auth', passwords);
 app.route('/api/invites', invites);
 app.route('/api/bug-reports', bugs);
 // `meetingNotes` is mounted first because it claims the deeper paths under a

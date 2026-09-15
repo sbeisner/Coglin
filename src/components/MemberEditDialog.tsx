@@ -51,6 +51,7 @@ const ERROR_COPY: Record<string, string> = {
 export function MemberEditDialog({
   member,
   canChangeRole,
+  onResetPassword,
   onOpenChange,
   onChanged,
 }: {
@@ -58,6 +59,13 @@ export function MemberEditDialog({
   member: Member | null;
   /** Coaches only. A mentor may still edit sub-teams. */
   canChangeRole: boolean;
+  /**
+   * Hands off to the reset dialog. Omitted when the viewer may not reset this
+   * person — a mentor looking at a coach or another mentor, or anybody looking
+   * at their own row, who wants Settings instead. The server enforces the same
+   * rule; this only avoids offering a button that would come back 403.
+   */
+  onResetPassword?: (member: Member) => void;
   onOpenChange: (open: boolean) => void;
   onChanged: () => void;
 }) {
@@ -135,6 +143,29 @@ export function MemberEditDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {/* Not in the footer: that row is Save and Remove, and a reset is
+              neither — it commits nothing here and hands off to its own
+              dialog. */}
+          {onResetPassword && member && (
+            <div className="border-border space-y-1.5 border-t pt-4">
+              <div className="text-muted-foreground u-eyebrow">Password</div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="min-h-11"
+                disabled={pending}
+                onClick={() => onResetPassword(member)}
+              >
+                Reset password
+              </Button>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Sends a link so they can choose a new one. Their username and
+                everything they&rsquo;ve worked on stay as they are.
+              </p>
             </div>
           )}
         </div>

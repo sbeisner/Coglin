@@ -6,10 +6,11 @@
  * That is the whole tenancy rule in practice; see `worker/lib/tenancy.ts`.
  */
 import { Hono } from 'hono';
-import { nowSeconds } from '../lib/crypto';
-import { readJson, optionalString } from '../lib/http';
+import { nowSeconds, randomToken, tokenId } from '../lib/crypto';
+import { appBaseUrl, readJson, optionalString } from '../lib/http';
 import { isValidTimeZone } from '../lib/tz';
 import { isRole, normaliseSubTeams } from '../lib/roles';
+import { sendPasswordReset } from '../lib/email';
 import { deleteRosterPhoto, ingestImage, MAX_BYTES } from './media';
 import {
   auth as authOf,
@@ -110,18 +111,34 @@ team.get('/season/current', requireMember, async (c) => {
  * already return arrays, so parsing server-side is what lets the swap in
  * `src/lib/api.ts` happen without touching Roster.tsx.
  *
- * Note there is no password, no email and no user id in the projection. The
- * roster screen needs none of them, and a student's row should carry as little
- * as possible past the API boundary.
+ * Note there is no password, no email address and no user id in the projection.
+ * The roster screen needs none of them, and a student's row should carry as
+ * little as possible past the API boundary. `has_email` is a boolean about
+ * whether an address exists, not the address — the reset dialog cannot render
+ * correctly without knowing which shape the account is, and a teammate learning
+ * that the coach has an email on file learns nothing they could not guess.
  */
 team.get('/members', requireMember, async (c) => {
   const { teamId, member: me } = authOf(c);
   const { results } = await c.env.DB.prepare(
-    `SELECT id, team_id, user_id, role, sub_teams, display_name, handle, status,
-            photo_media_id, photo_consent_at, is_purchase_approver, created_at
-       FROM members
-      WHERE team_id = ? AND status = 'active'
-      ORDER BY created_at ASC`,
+    `SELECT m.id AS id, m.team_id AS team_id, m.user_id AS user_id, m.role AS role,
+            m.sub_teams AS sub_teams, m.display_name AS display_name,
+            m.handle AS handle, m.status AS status,
+            m.photo_media_id AS photo_media_id,
+            m.photo_consent_at AS photo_consent_at,
+            m.is_purchase_approver AS is_purchase_approver,
+            m.created_at AS created_at,
+            -- Whether an address exists, never the address itself. The reset
+            -- dialog has to know which of two things to render: "type where to
+            -- send this" for an account with none, or "we'll mail the address
+            -- on file" for one that has. Publishing the boolean is what lets
+            -- the server refuse a typed address for the second case — see the
+            -- password-reset route below for why that refusal matters.
+            CASE WHEN u.email IS NULL THEN 0 ELSE 1 END AS has_email
+       FROM members m
+       JOIN users u ON u.id = m.user_id
+      WHERE m.team_id = ? AND m.status = 'active'
+      ORDER BY m.created_at ASC`,
   )
     .bind(teamId)
     .all<{
@@ -130,6 +147,7 @@ team.get('/members', requireMember, async (c) => {
       photo_media_id: string | null;
       photo_consent_at: number | null;
       is_purchase_approver: number;
+      has_email: number;
     }>();
 
   // Viewers are not offered the photo at all. The read route refuses it too —
@@ -145,6 +163,7 @@ team.get('/members', requireMember, async (c) => {
       // may be attached, not to publish when a consent form was signed.
       photo_consent: m.photo_consent_at !== null,
       is_purchase_approver: m.is_purchase_approver === 1,
+      has_email: m.has_email === 1,
     })),
   );
 });
@@ -263,6 +282,174 @@ team.patch(
     if (result.meta.changes === 0) return c.json({ error: 'not_found' }, 404);
 
     return c.json({ ok: true });
+  },
+);
+
+// ------------------------------------------------------ password recovery
+
+/**
+ * Mail somebody on the roster a link to choose a new password (COG-051).
+ *
+ * This exists because a locked-out student previously had no route back in at
+ * all. `users.email` is NULL for everyone who joined by invite, so there is
+ * nothing to run a normal "forgot password" against; the coach supplies a
+ * destination at the moment they press the button and Coglin forgets it again,
+ * the same trade `POST /api/invites` makes. The alternative people reach for —
+ * remove and re-invite — mints a NEW member row and orphans every task
+ * assignment, attendance mark and note the student ever touched.
+ *
+ * WHO MAY RESET WHOM. A mentor may reset a student or a viewer; only a coach
+ * may reset another coach or a mentor. A mentor cannot change roles today
+ * (see the guard in PATCH /members/:id), so letting one mail themselves a
+ * coach's reset link would be a straight path to owning the team.
+ *
+ * WHERE IT IS SENT is not a free choice, and this is the subtle part. If the
+ * target HAS an address on file, the mail goes there and any address in the
+ * body is ignored — otherwise a coach could redirect a peer coach's reset to
+ * themselves, and the endpoint would double as an oracle for "does this person
+ * use that address". A typed address is accepted only when there is no stored
+ * one, because then it is the only way to reach them at all.
+ */
+const RESET_TTL_HOURS = 1;
+const RESET_TTL = 60 * 60 * RESET_TTL_HOURS;
+/** Per-target and per-team bounds, same shape as MAX_PENDING in invites.ts and
+ *  the bug-report limits. A coach helping one forgetful student needs one or
+ *  two; a roster melting down at one meeting needs a handful. */
+const MAX_RESETS_PER_USER = 3;
+const MAX_RESETS_PER_TEAM = 10;
+
+team.post(
+  '/members/:id/password-reset',
+  sameOriginOnly,
+  requireMember,
+  requireRole('coach', 'mentor'),
+  async (c) => {
+    const body = await readJson(c);
+    if (!body) return c.json({ error: 'invalid_body' }, 400);
+
+    const { teamId, member: me, user } = authOf(c);
+    const memberId = c.req.param('id');
+    const now = nowSeconds();
+
+    const target = await c.env.DB.prepare(
+      `SELECT m.user_id AS user_id, m.role AS role, m.display_name AS display_name,
+              u.email AS email
+         FROM members m
+         JOIN users u ON u.id = m.user_id
+        WHERE m.id = ? AND m.team_id = ? AND m.status = 'active'`,
+    )
+      .bind(memberId, teamId)
+      .first<{
+        user_id: string;
+        role: string;
+        display_name: string;
+        email: string | null;
+      }>();
+    if (!target) return c.json({ error: 'not_found' }, 404);
+
+    // Signed in and asking for a mailed link to your own account is never the
+    // shortest path — Settings changes it directly, and /forgot covers the case
+    // where you cannot get in at all.
+    if (target.user_id === user.id)
+      return c.json({ error: 'cannot_reset_self' }, 400);
+
+    if (me.role !== 'coach' && (target.role === 'coach' || target.role === 'mentor'))
+      return c.json({ error: 'forbidden' }, 403);
+
+    // Stored address wins; a typed one is only consulted when there is none.
+    // `caller_chose_destination` drives whether the link comes back in the
+    // response — see the comment on the return.
+    let to: string;
+    const callerChoseDestination = target.email === null;
+    if (target.email) {
+      to = target.email;
+    } else {
+      to = String(body.email ?? '')
+        .trim()
+        .toLowerCase();
+      if (!to.includes('@') || to.length < 3)
+        return c.json({ error: 'invalid_email' }, 400);
+    }
+
+    // Both bounds in one read, hitting idx_password_resets_team. One shared 429
+    // code: the coach's remedy is to wait either way, and saying which limit
+    // they hit only helps somebody probing.
+    const counts = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS team_n,
+              SUM(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS theirs
+         FROM password_resets
+        WHERE team_id = ? AND created_at > ?`,
+    )
+      .bind(target.user_id, teamId, now - RESET_TTL)
+      .first<{ team_n: number; theirs: number | null }>();
+    if (
+      (counts?.theirs ?? 0) >= MAX_RESETS_PER_USER ||
+      (counts?.team_n ?? 0) >= MAX_RESETS_PER_TEAM
+    )
+      return c.json({ error: 'too_many_resets' }, 429);
+
+    const teamRow = await c.env.DB.prepare(
+      'SELECT team_number, name FROM teams WHERE id = ?',
+    )
+      .bind(teamId)
+      .first<{ team_number: number; name: string }>();
+    if (!teamRow) return c.json({ error: 'not_found' }, 404);
+
+    const token = randomToken(32);
+    const id = await tokenId(token, c.env.SESSION_PEPPER);
+
+    // Issuing supersedes every outstanding reset for this account. That is the
+    // remedy for the failure this design invites: a coach who types the address
+    // wrong re-sends to the right one, and the link sitting in a stranger's
+    // inbox dies now rather than in an hour.
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        'UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL',
+      ).bind(now, target.user_id),
+      c.env.DB.prepare(
+        `INSERT INTO password_resets
+           (id, user_id, team_id, created_by_member_id, kind, created_at, expires_at)
+         VALUES (?, ?, ?, ?, 'coach', ?, ?)`,
+      ).bind(id, target.user_id, teamId, me.id, now, now + RESET_TTL),
+    ]);
+
+    const url = `${appBaseUrl(c)}/reset/${token}`;
+
+    // After the row is committed, so a mail outage still leaves the coach a
+    // working link to read out loud.
+    const sent = await sendPasswordReset(c.env, {
+      to,
+      displayName: target.display_name,
+      teamNumber: teamRow.team_number,
+      teamName: teamRow.name,
+      requestedBy: me.display_name,
+      url,
+      expiresInHours: RESET_TTL_HOURS,
+    });
+
+    /**
+     * The link comes back ONLY when the caller supplied the destination.
+     *
+     * For a student that is the whole point: the coach typed where it goes, so
+     * handing them a copyable link grants them nothing they could not get by
+     * typing their own address, and it is what stops a Resend outage from being
+     * a dead end. It is the same fallback `InviteDialog` relies on.
+     *
+     * For an account WITH an address on file the mail went somewhere the caller
+     * did not choose, and returning the link would undo exactly the protection
+     * the stored-address rule above provides — a coach could pull a peer coach's
+     * reset link straight out of the response. So they get `sent` and nothing
+     * else, and if the mail fails that person uses "Forgot password" themselves.
+     */
+    return c.json(
+      {
+        ok: true,
+        sent,
+        expires_at: now + RESET_TTL,
+        ...(callerChoseDestination ? { url } : {}),
+      },
+      201,
+    );
   },
 );
 

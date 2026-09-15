@@ -112,6 +112,13 @@ export default function Login() {
                 required
               />
               <Submit pending={pending} />
+              {/* No link here on purpose: a student has no email on file, so
+                  /forgot can never work for them and a dead end is worse than a
+                  sentence telling them who to ask. */}
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Forgot your password? Ask your coach — they can send you a link
+                to pick a new one.
+              </p>
             </form>
           </TabsContent>
 
@@ -132,6 +139,14 @@ export default function Login() {
                 required
               />
               <Submit pending={pending} />
+              <p className="text-muted-foreground text-sm">
+                <Link
+                  to="/forgot"
+                  className="text-foreground underline underline-offset-4"
+                >
+                  Forgot your password?
+                </Link>
+              </p>
             </form>
           </TabsContent>
         </Tabs>

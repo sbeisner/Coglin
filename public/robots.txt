@@ -9,5 +9,7 @@ Allow: /
 Disallow: /app/
 Disallow: /api/
 Disallow: /invite/
+Disallow: /reset/
+Disallow: /forgot
 
 Sitemap: https://coglin.lilithforge.com/sitemap.xml

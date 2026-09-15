@@ -223,6 +223,104 @@ export async function createInvite(input: {
   return (await response.json()) as InviteResult;
 }
 
+// -------------------------------------------------------- password recovery
+
+export interface ResetLinkResult {
+  ok: true;
+  /** False when the mail failed. */
+  sent: boolean;
+  expires_at: number;
+  /**
+   * The link, for the coach to copy when the mail does not arrive.
+   *
+   * Present ONLY when the caller chose where the mail went — that is, for an
+   * account with no address on file, which is every student. When the server
+   * used a stored address instead, the link is withheld on purpose: handing it
+   * back would let a coach pull another adult's reset link out of the response.
+   * See the route in worker/routes/team.ts.
+   */
+  url?: string;
+}
+
+/**
+ * Mail somebody on the roster a link to choose a new password.
+ *
+ * `email` is only consulted for an account with `has_email === false`; for one
+ * that has an address the server ignores what is passed and uses the stored
+ * one. Like `createInvite`, an address sent here is mailed and forgotten.
+ */
+export function createMemberPasswordReset(
+  memberId: string,
+  input: { email?: string } = {},
+): Promise<ResetLinkResult> {
+  return send<ResetLinkResult>(
+    `/api/members/${memberId}/password-reset`,
+    'POST',
+    input,
+  );
+}
+
+/**
+ * Ask for a reset link for your own account.
+ *
+ * Answers 200 for an unknown address exactly as it does for a known one — a
+ * distinguishable answer would say whether somebody has a Coglin account. The
+ * copy on ForgotPassword.tsx has to stay just as vague, or it gives back what
+ * this endpoint withholds.
+ */
+export function requestPasswordReset(email: string): Promise<{ ok: true }> {
+  return send('/api/auth/forgot', 'POST', { email });
+}
+
+export interface PasswordResetPreview {
+  display_name: string | null;
+  /** Their sign-in name, when they have one. Null for an adult, who uses email. */
+  handle: string | null;
+  team: { team_number: number; name: string } | null;
+}
+
+/**
+ * Preview a reset link. Null for missing, used AND expired — the server does
+ * not distinguish them and neither can the screen.
+ *
+ * The one read here that swallows a failure instead of throwing: the caller's
+ * whole job is to render "this link is not valid", and there is no code it
+ * could usefully tell apart. Hand-rolled rather than using `get` for the same
+ * reason AcceptInvite's preview is.
+ */
+export async function getPasswordReset(
+  token: string,
+): Promise<PasswordResetPreview | null> {
+  const response = await fetch(
+    `/api/auth/reset/${encodeURIComponent(token)}`,
+    { credentials: 'same-origin', cache: 'no-store' },
+  );
+  if (!response.ok) return null;
+  return (await response.json()) as PasswordResetPreview;
+}
+
+/**
+ * Spend the token and set the password. The server sets a session cookie on the
+ * response, so the caller refreshes the session and goes to /app — the same
+ * courtesy the invite accept extends.
+ */
+export function redeemPasswordReset(
+  token: string,
+  password: string,
+): Promise<{ ok: true }> {
+  return send(`/api/auth/reset/${encodeURIComponent(token)}`, 'POST', {
+    password,
+  });
+}
+
+/** Change your own password. Keeps THIS session and signs out every other one. */
+export function changePassword(input: {
+  current_password: string;
+  new_password: string;
+}): Promise<{ ok: true }> {
+  return send('/api/auth/password', 'PATCH', input);
+}
+
 // ------------------------------------------------------------------ meetings
 
 export function listMeetings(params?: {

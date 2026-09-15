@@ -25,6 +25,9 @@ import Placeholder from '@/routes/Placeholder';
 import Debug from '@/routes/Debug';
 import Login from '@/routes/Login';
 import AcceptInvite from '@/routes/AcceptInvite';
+import ForgotPassword from '@/routes/ForgotPassword';
+import ResetPassword from '@/routes/ResetPassword';
+import Settings from '@/routes/Settings';
 import Signup from '@/routes/Signup';
 
 // The theme is applied pre-paint by the inline script in index.html, so there
@@ -157,6 +160,16 @@ export function App() {
                   `${APP_BASE_URL}/invite/<token>`). It did not move and must not. */}
               <Route path="/invite/:token" element={<AcceptInvite />} />
 
+              {/* Password recovery. Deliberately NOT behind RedirectIfSignedIn,
+                  unlike /login and /signup: the reason that wrapper exists is
+                  that a signed-in person shown a login form reads it as "it
+                  didn't work", and neither of these is a login form. The real
+                  case is a coach signed in on a laptop and locked out on a
+                  phone, and wrapping /reset would silently swallow a live link.
+                  Reset mail points at /reset/<token> (worker/lib/email.ts). */}
+              <Route path="/forgot" element={<ForgotPassword />} />
+              <Route path="/reset/:token" element={<ResetPassword />} />
+
               {/* The pricing page was /support for one afternoon before the framing
                   was corrected — it sells a product, it does not collect donations. */}
               <Route path="/support" element={<Navigate to="/pricing" replace />} />
@@ -167,6 +180,7 @@ export function App() {
                 <Route path="boards" element={<Boards />} />
                 <Route path="outreach" element={<Outreach />} />
                 <Route path="roster" element={<Roster />} />
+                <Route path="settings" element={<Settings />} />
                 <Route path="awards" element={<Placeholder />} />
                 <Route path="portfolio" element={<Portfolio />} />
                 {/* /calendar was a stub; the calendar is now a view on /meetings.
