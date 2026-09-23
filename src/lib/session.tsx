@@ -16,6 +16,7 @@ import {
   type ReactNode,
 } from 'react';
 import { SESSION_EXPIRED } from '@/lib/api';
+import { applySessionHint, reflectSessionHint } from '@/lib/sessionHint';
 import type { Role, SubTeam, Team } from '@/types';
 
 export interface SessionMember {
@@ -68,11 +69,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           ? { status: 'authenticated', session }
           : { status: 'anonymous', session: null },
       );
+      // The server answered, so this is worth remembering: it decides what the
+      // NEXT page load paints before it can ask. See src/lib/sessionHint.ts.
+      applySessionHint(session !== null);
     } catch {
       // A network failure is not a signed-out user, but there is nothing else
       // this component can do with it — the login screen at least offers a
       // retry, and a signed-in user's next action will re-resolve.
       setState({ status: 'anonymous', session: null });
+      // Reflected, NOT persisted. The screen has to match what we just decided
+      // or the login form stays hidden behind the "Opening Coglin…" panel; but
+      // a dropped connection is no evidence about the session, and writing it
+      // down would hand a signed-in coach the signed-out flash on every load
+      // after one bad moment on venue wifi.
+      reflectSessionHint(false);
     }
   }, []);
 
@@ -84,7 +94,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // straight to anonymous rather than re-asking /api/auth/me saves a round trip
   // whose answer is already known, and the route gate handles the redirect.
   useEffect(() => {
-    const onExpired = () => setState({ status: 'anonymous', session: null });
+    const onExpired = () => {
+      setState({ status: 'anonymous', session: null });
+      // A 401 from the server is as definitive as it gets.
+      applySessionHint(false);
+    };
     window.addEventListener(SESSION_EXPIRED, onExpired);
     return () => window.removeEventListener(SESSION_EXPIRED, onExpired);
   }, []);

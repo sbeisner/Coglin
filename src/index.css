@@ -622,3 +622,36 @@
     scroll-behavior: auto !important;
   }
 }
+
+/**
+ * Pre-hydration CTA arbitration. See src/lib/sessionHint.ts.
+ *
+ * The inline boot script in index.html sets data-session-hint="in" on <html>
+ * before first paint. Components render BOTH the signed-in and signed-out
+ * branches unconditionally — so their markup is a pure function of the route and
+ * matches the prerendered HTML exactly — and these rules decide which one is
+ * visible. That is the whole trick: the value that varies per browser never
+ * enters React's render, so it cannot cause a hydration mismatch.
+ *
+ * Deliberately UNLAYERED. Tailwind v4 emits everything into layers, and an
+ * unlayered rule outranks all of them. This decides whether a signed-in coach is
+ * offered a sign-in link; it must not be losable to a utility class.
+ *
+ * display: contents, not block: the "Sign in" button carries `hidden
+ * sm:inline-flex`, and the header is a flex row, so the wrapper has to be
+ * layout-transparent or it breaks both. display: none on the losing branch also
+ * takes it out of the accessibility tree and out of tab order — the option that
+ * is not being offered is genuinely not offered.
+ */
+.session-in-only {
+  display: none;
+}
+.session-out-only {
+  display: contents;
+}
+[data-session-hint='in'] .session-in-only {
+  display: contents;
+}
+[data-session-hint='in'] .session-out-only {
+  display: none;
+}

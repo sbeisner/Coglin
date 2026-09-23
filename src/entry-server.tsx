@@ -20,7 +20,7 @@ import { App } from '@/App';
  * it renders with. Node cannot import a .ts file directly, and a second copy of
  * this list in the script would drift the day a page is added.
  */
-export { PAGES, ORIGIN, SITE_NAME } from '@/marketing/seo';
+export { PAGES, PRERENDER, ORIGIN, SITE_NAME } from '@/marketing/seo';
 
 export function render(url: string): string {
   return renderToString(

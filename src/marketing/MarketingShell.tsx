@@ -11,13 +11,24 @@
  *     shell and not in a page template someone copies.
  *
  *  2. THE SESSION-AWARE CTA. A coach who is already signed in should not be
- *     offered "Create your team" on the page their own app links to. The header
- *     asks the existing SessionProvider and offers "Open Coglin" instead.
+ *     offered "Create your team" on the page their own app links to.
+ *
+ *     It no longer asks SessionProvider, because the answer arrives too late to
+ *     be useful here. These pages are prerendered at build time, where nobody is
+ *     signed in, so asking produced "Sign in / Create your team" in the static
+ *     HTML for everyone and corrected it only once /api/auth/me returned — a
+ *     flip that is invisible on a warm cache and long enough to click through on
+ *     a cold one. Both branches are now rendered unconditionally and chosen
+ *     between by CSS, from an attribute an inline script in index.html sets on
+ *     <html> before first paint. See src/lib/sessionHint.ts.
+ *
+ *     The consequence worth knowing: this component's output is a pure function
+ *     of the route. Keep it that way — a boot-varying value read during render
+ *     here is a hydration mismatch against the prerendered markup.
  */
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { Menu, X } from 'lucide-react';
-import { useSessionState } from '@/lib/session';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -63,8 +74,6 @@ function useRouteMeta() {
 export function MarketingShell() {
   useRouteMeta();
   const [open, setOpen] = useState(false);
-  const { status } = useSessionState();
-  const signedIn = status === 'authenticated';
 
   return (
     <div className="bg-background flex min-h-dvh flex-col">
@@ -103,20 +112,19 @@ export function MarketingShell() {
 
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
-            {signedIn ? (
+            <div className="session-in-only">
               <Button asChild size="sm">
                 <Link to="/app">Open Coglin</Link>
               </Button>
-            ) : (
-              <>
-                <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-                  <Link to="/login">Sign in</Link>
-                </Button>
-                <Button asChild size="sm">
-                  <Link to="/signup">Create your team</Link>
-                </Button>
-              </>
-            )}
+            </div>
+            <div className="session-out-only">
+              <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+                <Link to="/login">Sign in</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link to="/signup">Create your team</Link>
+              </Button>
+            </div>
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
@@ -150,7 +158,7 @@ export function MarketingShell() {
                 {l.label}
               </NavLink>
             ))}
-            {!signedIn && (
+            <div className="session-out-only">
               <NavLink
                 to="/login"
                 onClick={() => setOpen(false)}
@@ -158,7 +166,7 @@ export function MarketingShell() {
               >
                 Sign in
               </NavLink>
-            )}
+            </div>
           </nav>
         )}
       </header>

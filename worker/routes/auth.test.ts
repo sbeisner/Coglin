@@ -197,7 +197,16 @@ describe('login', () => {
       }),
     });
     expect(response.status).toBe(200);
-    expect(response.headers.get('Set-Cookie')).toContain('coglin_session=');
+    const cookie = response.headers.get('Set-Cookie') ?? '';
+    expect(cookie).toContain('coglin_session=');
+    // HttpOnly is why the client cannot know at boot whether it is signed in,
+    // and therefore why src/lib/sessionHint.ts exists at all. It is also what
+    // keeps that hint honest: if the cookie ever became readable, somebody would
+    // reasonably read it as truth instead of as a guess about what to paint.
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('Secure');
+    // Path=/ or the session is invisible to the marketing pages at the root.
+    expect(cookie).toContain('Path=/');
   });
 
   it('rejects a wrong password and an unknown account identically', async () => {

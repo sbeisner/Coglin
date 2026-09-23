@@ -13,7 +13,7 @@
     <!-- FALLBACK ONLY. scripts/prerender.mjs strips these and writes per-route
          title, description, canonical and OG tags into each marketing page at
          build time. What is left here is what an unprerendered route gets —
-         /app/*, /login, /invite/:token — none of which should be indexed. Edit
+         /app/* and /invite/:token — neither of which should be indexed. Edit
          src/marketing/seo.ts, not this. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Coglin" />
@@ -47,6 +47,20 @@
             window.matchMedia('(prefers-color-scheme: dark)').matches);
         if (dark) document.documentElement.dataset.theme = 'dark';
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      } catch (e) {}
+    </script>
+
+    <!-- Decides, before first paint, whether the header offers "Open Coglin" or
+         "Sign in". The session cookie is HttpOnly so nothing here can verify
+         anything — this is a display guess, and index.css picks between two
+         branches that are BOTH always rendered, which is what keeps it clear of
+         hydration. Mirrors SESSION_HINT_BOOT_SCRIPT in src/lib/sessionHint.ts —
+         edit both together. -->
+    <script>
+      try {
+        var h = localStorage.getItem('coglin.session-hint');
+        if (h && h.slice(0, 3) === 'in:' && Number(h.slice(3)) > Date.now())
+          document.documentElement.dataset.sessionHint = 'in';
       } catch (e) {}
     </script>
   </head>

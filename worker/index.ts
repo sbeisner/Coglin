@@ -126,6 +126,43 @@ app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404));
 // already reserves /media/* in run_worker_first on all three environments.
 app.route('/media', mediaFiles);
 
+/**
+ * A hashed asset that no longer exists must 404 — it must NOT fall back to HTML.
+ *
+ * `not_found_handling: "single-page-application"` applies to /assets/* as well,
+ * so before this handler a stale bundle URL answered:
+ *
+ *     $ curl -sSI https://coglin.lilithforge.com/assets/index-DEADBEEF.js
+ *     HTTP/2 200
+ *     content-type: text/html
+ *     cache-control: public, max-age=31536000, immutable
+ *     x-content-type-options: nosniff
+ *
+ * which is the login bug in full. After a deploy, a browser holding stale HTML
+ * asks for the previous index-<hash>.js, is handed the landing page as
+ * text/html under nosniff, and refuses to execute it. React never boots, so the
+ * header keeps the "Sign in" baked into the prerendered markup, and clicking it
+ * is a full page load onto equally inert HTML. Nothing on the page works, no
+ * error reaches the server, and it clears up by itself once the HTML
+ * revalidates — which is exactly why it got reported as random and
+ * cache-dependent rather than as "the site is down".
+ *
+ * The `immutable` above is what made it stick: the browser cached the wrong
+ * answer for a year against a URL it would otherwise have retried.
+ *
+ * Nothing Vite emits under /assets/ is HTML, so text/html here always means the
+ * fallback fired. The cost is a Worker invocation per asset request — bounded,
+ * because these are immutable and cached at both the edge and the browser, and
+ * cheap set against a failure mode that is invisible in logs.
+ */
+app.all('/assets/*', async (c) => {
+  const response = await c.env.ASSETS.fetch(c.req.raw);
+  if (!(response.headers.get('content-type') ?? '').includes('text/html')) {
+    return response;
+  }
+  return c.text('not_found', 404, { 'Cache-Control': 'no-store' });
+});
+
 // Exported as an object rather than the Hono app itself, because the Worker now
 // has a second entry point: the nightly backup cron (COG-040).
 export default {

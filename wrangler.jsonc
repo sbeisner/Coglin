@@ -14,10 +14,17 @@
   // fetched at runtime from D1/R2 through the Worker routes listed in
   // run_worker_first. not_found_handling makes deep links (/board/build) return
   // the SPA shell instead of a 404.
+  //
+  // /assets/* is in run_worker_first for the opposite reason: not_found_handling
+  // applies there too, so a hashed bundle that no longer exists was answered
+  // with the SPA shell as text/html — and, thanks to the /assets/* rule in
+  // public/_headers, cached immutable for a year. See the handler in
+  // worker/index.ts; it is the fix for the login bug, not an optimisation.
+  // All three environments must agree, or the bug returns on whichever lags.
   "assets": {
     "not_found_handling": "single-page-application",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/media/*"]
+    "run_worker_first": ["/api/*", "/media/*", "/assets/*"]
   },
 
   "observability": { "enabled": true },
@@ -46,7 +53,7 @@
       "assets": {
         "not_found_handling": "single-page-application",
         "binding": "ASSETS",
-        "run_worker_first": ["/api/*", "/media/*"]
+        "run_worker_first": ["/api/*", "/media/*", "/assets/*"]
       },
       "observability": { "enabled": true },
       // STRIPE_PRODUCT_ID is the Stripe product every purchase rolls up under.
@@ -107,7 +114,7 @@
       "assets": {
         "not_found_handling": "single-page-application",
         "binding": "ASSETS",
-        "run_worker_first": ["/api/*", "/media/*"]
+        "run_worker_first": ["/api/*", "/media/*", "/assets/*"]
       },
       "observability": { "enabled": true },
       // See the note in the staging block: this id is test-mode today and must
