@@ -6,12 +6,12 @@ beforeAll(() => {
   stubResend();
 });
 
-async function makeMeeting(cookie: string): Promise<string> {
+async function makeMeeting(cookie: string, dayOffset = 7): Promise<string> {
   const season = await callJson<{ starts_at: number }>('/api/season/current', { cookie });
   const created = await callJson<{ meeting: { id: string } }>('/api/meetings', {
     method: 'POST',
     cookie,
-    body: JSON.stringify({ starts_at: season.body.starts_at + 7 * 86400 }),
+    body: JSON.stringify({ starts_at: season.body.starts_at + dayOffset * 86400 }),
   });
   return created.body.meeting.id;
 }
@@ -120,37 +120,103 @@ describe('attendance', () => {
     expect(response.status).toBe(403);
   });
 
-  it('rolls up the season, which is what Sustain asks for', async () => {
+  it('lays out the season grid for the roster: held meetings and their marks', async () => {
     const coach = await signUpCoach(8103);
     const ada = await inviteAndAccept(coach, { role: 'student', handle: 'ada3' });
     const adaId = (await whoami(ada.cookie)).member_id;
 
+    const held: string[] = [];
     for (let i = 0; i < 3; i++) {
-      const meetingId = await makeMeeting(coach);
+      // Created newest-first, so the ordering assertion below is proving the
+      // ORDER BY and not insertion order.
+      const meetingId = await makeMeeting(coach, 30 - i * 7);
       await call(`/api/meetings/${meetingId}/attendance`, {
         method: 'PUT',
         cookie: coach,
         body: JSON.stringify({
           entries: [
             i === 2
-              ? { member_id: adaId, state: 'other', note: 'Dentist' }
-              : { member_id: adaId, state: 'present' },
+              ? { member_id: adaId, state: 'other', note: 'Arrived late' }
+              : { member_id: adaId, state: i === 0 ? 'present' : 'absent' },
           ],
         }),
       });
+      held.push(meetingId);
     }
 
-    const { body } = await callJson<{
-      members: Record<string, number | string>[];
+    // Marks on a meeting that is still planned or was cancelled are not the
+    // season's attendance: only a held meeting is a column in the grid.
+    const planned = await makeMeeting(coach);
+    const cancelled = await makeMeeting(coach);
+    for (const id of [planned, cancelled]) {
+      await call(`/api/meetings/${id}/attendance`, {
+        method: 'PUT',
+        cookie: coach,
+        body: JSON.stringify({ entries: [{ member_id: adaId, state: 'present' }] }),
+      });
+    }
+
+    // Last season's meeting, reached the way a season rollover would leave it:
+    // same team, a season that is no longer current.
+    const { team_id: teamId } = await whoami(coach);
+    const oldSeason = crypto.randomUUID();
+    const oldMeeting = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO seasons (id, team_id, label, starts_at, ends_at, is_current)
+         VALUES (?, ?, '2025-26', 1756684800, 1780271999, 0)`,
+      ).bind(oldSeason, teamId),
+      env.DB.prepare(
+        `INSERT INTO meetings (id, team_id, season_id, starts_at, status, created_at)
+         VALUES (?, ?, ?, 1760000000, 'held', 1760000000)`,
+      ).bind(oldMeeting, teamId, oldSeason),
+      env.DB.prepare(
+        `INSERT INTO meeting_attendance
+           (id, team_id, meeting_id, member_id, state, recorded_at)
+         VALUES (?, ?, ?, ?, 'present', 1760000000)`,
+      ).bind(crypto.randomUUID(), teamId, oldMeeting, adaId),
+    ]);
+
+    // Starting a meeting is what marks it held; the column is set directly so
+    // this test does not also exercise the notes seeding behind /start.
+    await env.DB.batch([
+      ...held.map((id) =>
+        env.DB.prepare(`UPDATE meetings SET status = 'held' WHERE id = ?`).bind(id),
+      ),
+      env.DB.prepare(`UPDATE meetings SET status = 'cancelled' WHERE id = ?`).bind(
+        cancelled,
+      ),
+    ]);
+
+    const { status, body } = await callJson<{
+      season: { label: string } | null;
+      meetings: { id: string; starts_at: number }[];
+      records: { meeting_id: string; member_id: string; state: string; note: string | null }[];
     }>('/api/attendance/summary', { cookie: coach });
-    const ada3 = body.members.find((m) => m.member_id === adaId);
-    expect(ada3?.present).toBe(2);
-    expect(ada3?.other).toBe(1);
-    // The retired columns are gone from the projection rather than reported as
-    // permanent zeroes — see the comment on the route.
-    expect(ada3).not.toHaveProperty('excused');
-    expect(ada3).not.toHaveProperty('arrived_late');
-    expect(ada3).not.toHaveProperty('minutes');
+    expect(status).toBe(200);
+    expect(body.season?.label).toBeTruthy();
+    expect(body.meetings.map((m) => m.id)).toEqual([...held].reverse());
+
+    const ada3 = body.records.filter((r) => r.member_id === adaId);
+    expect(ada3.map((r) => [r.meeting_id, r.state, r.note])).toEqual(
+      expect.arrayContaining([
+        [held[0], 'present', null],
+        [held[1], 'absent', null],
+        [held[2], 'other', 'Arrived late'],
+      ]),
+    );
+    expect(ada3).toHaveLength(3);
+  });
+
+  it('keeps the attendance grid to coaches and mentors', async () => {
+    const coach = await signUpCoach(8112);
+    const mentor = await inviteAndAccept(coach, { role: 'mentor', handle: 'grid-mentor' });
+    const student = await inviteAndAccept(coach, { role: 'student', handle: 'grid-student' });
+    const viewer = await inviteAndAccept(coach, { role: 'viewer', handle: 'grid-viewer' });
+
+    expect((await call('/api/attendance/summary', { cookie: mentor.cookie })).status).toBe(200);
+    expect((await call('/api/attendance/summary', { cookie: student.cookie })).status).toBe(403);
+    expect((await call('/api/attendance/summary', { cookie: viewer.cookie })).status).toBe(403);
   });
 
   it('requires a detail when the state is other', async () => {

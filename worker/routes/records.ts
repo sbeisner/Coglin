@@ -227,46 +227,61 @@ records.post(
 );
 
 /**
- * The Sustain rollup: who is still turning up in February.
+ * The roster's attendance grid: every held meeting this season, and every mark
+ * on it.
  *
- * `excused` used to be its own column here and 0003 called it "exactly the
- * distinction a Sustain narrative needs". It is gone: `other` is the bucket, and
- * the narrative gets written from the notes rather than from a count. That is a
- * real loss and it is the price of a roll that actually gets taken — see
- * migrations/0005_attendance.sql.
+ * This used to be a per-member count rollup that nothing in the client called.
+ * It was not scoped to a season, it counted marks on planned and cancelled
+ * meetings, and any member could read it, students included. It is now the
+ * grid behind Roster's Attendance view:
  *
- * arrived_late, left_early and minutes leave the projection too. Nothing ever
- * consumed them (this endpoint has no caller in the client at all), so the
- * honest move is to stop reporting numbers that would now always be zero rather
- * than to keep three columns of decoration.
+ * - Held meetings of the CURRENT season only. Preseason meetings belong to the
+ *   season through `season_id` (see routes/meetings.ts), so this filters on
+ *   that rather than on dates.
+ * - Coach and mentor only. A grid of which named minors were missing on which
+ *   named evenings is the same kind of adult-private record as an action item,
+ *   and the default-deny argument at the top of this file applies to it. Staff
+ *   can already see every one of these marks, notes included, meeting by
+ *   meeting; this puts them side by side.
+ *
+ * Counts are left to the client. It needs the cells anyway, and a second copy
+ * of the same numbers is a second thing that can disagree.
  */
-records.get('/attendance/summary', requireMember, async (c) => {
-  const { teamId } = authOf(c);
+records.get(
+  '/attendance/summary',
+  requireMember,
+  requireRole('coach', 'mentor'),
+  async (c) => {
+    const { teamId } = authOf(c);
 
-  const held = await c.env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM meetings
-      WHERE team_id = ? AND status = 'held'`,
-  )
-    .bind(teamId)
-    .first<{ n: number }>();
+    const season = await c.env.DB.prepare(
+      'SELECT id, label FROM seasons WHERE team_id = ? AND is_current = 1',
+    )
+      .bind(teamId)
+      .first<{ id: string; label: string }>();
+    if (!season) return c.json({ season: null, meetings: [], records: [] });
 
-  const { results } = await c.env.DB.prepare(
-    `SELECT m.id AS member_id, m.display_name AS display_name,
-            SUM(CASE WHEN a.state = 'present' THEN 1 ELSE 0 END) AS present,
-            SUM(CASE WHEN a.state = 'absent' THEN 1 ELSE 0 END) AS absent,
-            SUM(CASE WHEN a.state = 'other' THEN 1 ELSE 0 END) AS other
-       FROM members m
-       LEFT JOIN meeting_attendance a
-         ON a.member_id = m.id AND a.team_id = m.team_id
-      WHERE m.team_id = ? AND m.status = 'active'
-      GROUP BY m.id
-      ORDER BY m.created_at ASC`,
-  )
-    .bind(teamId)
-    .all();
+    const [meetings, marks] = await c.env.DB.batch([
+      c.env.DB.prepare(
+        `SELECT id, title, starts_at, kind FROM meetings
+          WHERE team_id = ? AND season_id = ? AND status = 'held'
+          ORDER BY starts_at ASC`,
+      ).bind(teamId, season.id),
+      c.env.DB.prepare(
+        `SELECT a.meeting_id, a.member_id, a.state, a.note
+           FROM meeting_attendance a
+           JOIN meetings mt ON mt.id = a.meeting_id AND mt.team_id = a.team_id
+          WHERE a.team_id = ? AND mt.season_id = ? AND mt.status = 'held'`,
+      ).bind(teamId, season.id),
+    ]);
 
-  return c.json({ meetings_held: held?.n ?? 0, members: results });
-});
+    return c.json({
+      season,
+      meetings: meetings.results,
+      records: marks.results,
+    });
+  },
+);
 
 // ------------------------------------------------------------- action items
 

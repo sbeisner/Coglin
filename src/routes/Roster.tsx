@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { HandCoins, Pencil } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { CalendarCheck, HandCoins, Pencil, Users } from 'lucide-react';
 import * as api from '@/lib/api';
 import { useAsync } from '@/lib/useAsync';
 import { useSession } from '@/lib/session';
@@ -9,6 +10,7 @@ import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
 import { RosterPhoto } from '@/components/RosterPhoto';
 import { PageHeader } from '@/components/PageHeader';
 import { Skeleton } from '@/components/Skeleton';
+import { AttendanceGrid } from '@/components/roster/AttendanceGrid';
 import { SUB_TEAMS, type Member, type Role } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -19,6 +21,23 @@ const ROLE_LABEL: Record<Role, string> = {
   viewer: 'Viewer',
 };
 
+type RosterView = 'members' | 'attendance';
+
+const VIEWS: { id: RosterView; label: string; Icon: typeof Users }[] = [
+  { id: 'members', label: 'Members', Icon: Users },
+  { id: 'attendance', label: 'Attendance', Icon: CalendarCheck },
+];
+
+const VIEW_KEY = 'coglin:roster-view';
+
+function storedView(): RosterView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'attendance' ? 'attendance' : 'members';
+  } catch {
+    return 'members';
+  }
+}
+
 export default function Roster() {
   // Bumping this refetches the roster after an invite is accepted or created,
   // rather than hand-patching local state with a member who does not exist yet.
@@ -28,6 +47,42 @@ export default function Roster() {
   const members = useAsync(api.listMembers, [reloadKey]);
   const { member: me } = useSession();
   const canInvite = me.role === 'coach' || me.role === 'mentor';
+  const season = useAsync(api.getCurrentSeason, []);
+
+  /**
+   * Members | Attendance, the same URL-first, localStorage-second switch as
+   * Meetings' List | Calendar. Anyone who is not staff is pinned to Members:
+   * the grid is a record of which minors missed which evenings, and the API
+   * refuses it to them too.
+   */
+  const [params, setParams] = useSearchParams();
+  const requested: RosterView =
+    params.get('view') === 'attendance'
+      ? 'attendance'
+      : params.has('view')
+        ? 'members'
+        : storedView();
+  const view: RosterView = canInvite ? requested : 'members';
+  const setView = useCallback(
+    (next: RosterView) => {
+      const updated = new URLSearchParams(params);
+      updated.set('view', next);
+      setParams(updated, { replace: true });
+      try {
+        localStorage.setItem(VIEW_KEY, next);
+      } catch {
+        // Not being able to remember the preference is not worth an error.
+      }
+    },
+    [params, setParams],
+  );
+  const grid = useAsync(
+    () =>
+      view === 'attendance'
+        ? api.attendanceSummary()
+        : Promise.resolve(null),
+    [view, reloadKey],
+  );
 
   /**
    * Whether the row currently open in the edit dialog may have its password
@@ -50,109 +105,145 @@ export default function Roster() {
 
   return (
     <>
-      <PageHeader eyebrow="2026-27" title="Roster" />
+      <PageHeader eyebrow={season.data?.label ?? 'Season'} title="Roster" />
 
       <div className="space-y-8 px-4 py-6 md:px-8">
         {canInvite && (
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div
+              role="radiogroup"
+              aria-label="View"
+              className="border-border inline-flex rounded-md border p-0.5"
+            >
+              {VIEWS.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={view === id}
+                  onClick={() => setView(id)}
+                  className={cn(
+                    'focus-visible:ring-ring inline-flex min-h-11 items-center gap-2 rounded px-3 text-sm font-medium focus-visible:ring-2 focus-visible:outline-none',
+                    view === id ? 'bg-muted text-foreground' : 'text-muted-foreground',
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden />
+                  {label}
+                </button>
+              ))}
+            </div>
             <InviteDialog onInvited={() => setReloadKey((k) => k + 1)} />
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-          <Count
-            n={students.length}
-            label="Students"
-            hint={`${15 - students.length} slots left of 15`}
-          />
-          <Count n={adults.length} label="Coaches & mentors" />
-        </div>
+        {view === 'attendance' ? (
+          grid.status === 'ready' && grid.data && members.status === 'ready' ? (
+            <AttendanceGrid grid={grid.data} students={students} />
+          ) : grid.status === 'error' ? (
+            <p className="text-destructive text-sm">
+              Attendance could not be loaded. {grid.error.message}
+            </p>
+          ) : (
+            <Skeleton className="h-64" />
+          )
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+              <Count
+                n={students.length}
+                label="Students"
+                hint={`${15 - students.length} slots left of 15`}
+              />
+              <Count n={adults.length} label="Coaches & mentors" />
+            </div>
 
-        {/* The wording for the shield icon on each row. Coaches only, because a
-            student cannot act on it and does not need to read a paragraph about
-            consent paperwork to look up a teammate's handle. */}
-        {canInvite && (
-          <p className="text-muted-foreground max-w-2xl text-xs">
-            Photos help put faces to names in September. Coglin will not hold a
-            student&rsquo;s photo until you confirm their signed{' '}
-            <i>FIRST</i> Consent and Release is on file — that is what the shield
-            button records. Photos are visible to the team only, never to viewers,
-            and are deleted when a member leaves the roster.
-          </p>
-        )}
+            {/* The wording for the shield icon on each row. Coaches only, because a
+                student cannot act on it and does not need to read a paragraph about
+                consent paperwork to look up a teammate's handle. */}
+            {canInvite && (
+              <p className="text-muted-foreground max-w-2xl text-xs">
+                Photos help put faces to names in September. Coglin will not hold a
+                student&rsquo;s photo until you confirm their signed{' '}
+                <i>FIRST</i> Consent and Release is on file — that is what the shield
+                button records. Photos are visible to the team only, never to viewers,
+                and are deleted when a member leaves the roster.
+              </p>
+            )}
 
-        {members.status === 'loading' && <Skeleton className="h-48" />}
+            {members.status === 'loading' && <Skeleton className="h-48" />}
 
-        {adults.length > 0 && (
-          <section>
-            <h2 className="u-eyebrow mb-3">Coaches & mentors</h2>
-            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {adults.map((m) => (
-                <MemberRow
-                  key={m.id}
-                  member={m}
-                  canManage={canInvite}
-                  onEdit={setEditing}
-                  onChanged={() => setReloadKey((k) => k + 1)}
-                />
-              ))}
-            </ul>
-          </section>
-        )}
+            {adults.length > 0 && (
+              <section>
+                <h2 className="u-eyebrow mb-3">Coaches & mentors</h2>
+                <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {adults.map((m) => (
+                    <MemberRow
+                      key={m.id}
+                      member={m}
+                      canManage={canInvite}
+                      onEdit={setEditing}
+                      onChanged={() => setReloadKey((k) => k + 1)}
+                    />
+                  ))}
+                </ul>
+              </section>
+            )}
 
-        {/* Grouped by sub-team, because that is how a coach actually thinks
-            about the roster — who is on build tonight, not an alphabetical
-            list of everyone. Students appear under each sub-team they serve. */}
-        {SUB_TEAMS.map((st) => {
-          const group = students.filter((m) => m.sub_teams.includes(st.id));
-          if (group.length === 0) return null;
-          return (
-            <section key={st.id}>
-              <h2 className="u-eyebrow mb-3">
-                {st.label}{' '}
-                <span className="tabular font-mono">{group.length}</span>
-              </h2>
-              <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {group.map((m) => (
-                  <MemberRow
-                    key={m.id}
-                    member={m}
-                    canManage={canInvite}
-                    onEdit={setEditing}
-                    onChanged={() => setReloadKey((k) => k + 1)}
-                  />
-                ))}
-              </ul>
-            </section>
-          );
-        })}
+            {/* Grouped by sub-team, because that is how a coach actually thinks
+                about the roster — who is on build tonight, not an alphabetical
+                list of everyone. Students appear under each sub-team they serve. */}
+            {SUB_TEAMS.map((st) => {
+              const group = students.filter((m) => m.sub_teams.includes(st.id));
+              if (group.length === 0) return null;
+              return (
+                <section key={st.id}>
+                  <h2 className="u-eyebrow mb-3">
+                    {st.label}{' '}
+                    <span className="tabular font-mono">{group.length}</span>
+                  </h2>
+                  <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {group.map((m) => (
+                      <MemberRow
+                        key={m.id}
+                        member={m}
+                        canManage={canInvite}
+                        onEdit={setEditing}
+                        onChanged={() => setReloadKey((k) => k + 1)}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
 
-        {/* Students with no sub-team, who until now appeared NOWHERE.
-            The sections above are built by mapping over the sub-teams and
-            skipping the empty ones, so an empty `sub_teams` array — the column
-            default, and what every invite without a ticked chip produces — meant
-            a student counted in the tile at the top of this page and rendered in
-            no list at all. Invisible, and with no way to fix them: there was no
-            route that could change a member's sub-teams. This group is where you
-            find them, and the pencil beside each one is where you assign them. */}
-        {unassigned.length > 0 && (
-          <section>
-            <h2 className="u-eyebrow mb-3">
-              No sub-team yet{' '}
-              <span className="tabular font-mono">{unassigned.length}</span>
-            </h2>
-            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {unassigned.map((m) => (
-                <MemberRow
-                  key={m.id}
-                  member={m}
-                  canManage={canInvite}
-                  onEdit={setEditing}
-                  onChanged={() => setReloadKey((k) => k + 1)}
-                />
-              ))}
-            </ul>
-          </section>
+            {/* Students with no sub-team, who until now appeared NOWHERE.
+                The sections above are built by mapping over the sub-teams and
+                skipping the empty ones, so an empty `sub_teams` array — the column
+                default, and what every invite without a ticked chip produces — meant
+                a student counted in the tile at the top of this page and rendered in
+                no list at all. Invisible, and with no way to fix them: there was no
+                route that could change a member's sub-teams. This group is where you
+                find them, and the pencil beside each one is where you assign them. */}
+            {unassigned.length > 0 && (
+              <section>
+                <h2 className="u-eyebrow mb-3">
+                  No sub-team yet{' '}
+                  <span className="tabular font-mono">{unassigned.length}</span>
+                </h2>
+                <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {unassigned.map((m) => (
+                    <MemberRow
+                      key={m.id}
+                      member={m}
+                      canManage={canInvite}
+                      onEdit={setEditing}
+                      onChanged={() => setReloadKey((k) => k + 1)}
+                    />
+                  ))}
+                </ul>
+              </section>
+            )}
+          </>
         )}
       </div>
 

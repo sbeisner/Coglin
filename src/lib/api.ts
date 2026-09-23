@@ -37,6 +37,7 @@ import type {
   ActionItem,
   ActionStatus,
   AgendaItem,
+  AttendanceGrid,
   AttendanceRecord,
   AttendanceState,
   AwardCriterion,
@@ -821,16 +822,8 @@ export function checkInSelf(
   return send(`/api/meetings/${meetingId}/attendance/self`, 'POST', {});
 }
 
-export function attendanceSummary(): Promise<{
-  meetings_held: number;
-  members: {
-    member_id: string;
-    display_name: string;
-    present: number;
-    absent: number;
-    other: number;
-  }[];
-}> {
+/** The roster's season attendance grid. Coach and mentor only. */
+export function attendanceSummary(): Promise<AttendanceGrid> {
   return get('/api/attendance/summary');
 }
 
