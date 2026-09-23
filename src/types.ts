@@ -118,6 +118,22 @@ export interface AttendanceRecord {
   recorded_at: number;
 }
 
+/**
+ * The roster's Attendance view: every held meeting of the current season and
+ * every mark on one. Coach and mentor only — see GET /api/attendance/summary.
+ * A student with no record for a meeting simply has no entry in `records`.
+ */
+export interface AttendanceGrid {
+  season: { id: string; label: string } | null;
+  meetings: { id: string; title: string; starts_at: number; kind: MeetingKind }[];
+  records: {
+    meeting_id: string;
+    member_id: string;
+    state: AttendanceState;
+    note: string | null;
+  }[];
+}
+
 /** open | done | dropped, mirroring ACTION_STATUSES in worker/lib/meetings.ts. */
 export type ActionStatus = 'open' | 'done' | 'dropped';
 
