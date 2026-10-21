@@ -77,7 +77,10 @@ export function AppShell() {
   }, [current]);
 
   return (
-    <div className="bg-background min-h-dvh md:flex">
+    // The print: classes are for the funding request (routes/FundingRequest),
+    // which prints from inside the shell — so the chrome steps aside on paper.
+    // `!` because print and md: would otherwise tie on a desktop-width page.
+    <div className="bg-background min-h-dvh md:flex print:block! print:bg-white">
       {/* Skip link — the board has a lot of tab stops to wade through. */}
       <a
         href="#main"
@@ -89,7 +92,7 @@ export function AppShell() {
       {/* ---------- Desktop sidebar ----------
           The ink slab. No right border: the surface change already draws the
           edge, and a hairline on top of it is a seam for its own sake. */}
-      <aside className="bg-ink text-ink-foreground hidden w-60 shrink-0 flex-col md:sticky md:top-0 md:flex md:h-dvh">
+      <aside className="bg-ink text-ink-foreground hidden w-60 shrink-0 flex-col md:sticky md:top-0 md:flex md:h-dvh print:hidden!">
         <TeamMark team={team} />
         <nav className="flex-1 overflow-y-auto px-2 py-1.5" aria-label="Main">
           <ul className="space-y-0.5">
@@ -104,7 +107,7 @@ export function AppShell() {
       </aside>
 
       {/* ---------- Mobile top bar ---------- */}
-      <div className="bg-background/95 border-border sticky top-0 z-30 flex items-center gap-3 border-b px-4 py-3 backdrop-blur md:hidden">
+      <div className="bg-background/95 border-border sticky top-0 z-30 flex items-center gap-3 border-b px-4 py-3 backdrop-blur md:hidden print:hidden!">
         <span className="u-bar h-5 w-1.5 shrink-0" aria-hidden />
         <div className="min-w-0 flex-1">
           <div className="u-display truncate text-base leading-none">
@@ -151,7 +154,7 @@ export function AppShell() {
       </div>
 
       {/* ---------- Content ---------- */}
-      <main id="main" className="min-w-0 flex-1 pb-20 md:pb-0">
+      <main id="main" className="min-w-0 flex-1 pb-20 md:pb-0 print:pb-0">
         <Outlet />
       </main>
 
@@ -164,7 +167,7 @@ export function AppShell() {
           variable rather than interpolating the class name, which Tailwind
           cannot see and will not emit. */}
       <nav
-        className="bg-background/95 border-border fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t backdrop-blur md:hidden"
+        className="bg-background/95 border-border fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t backdrop-blur md:hidden print:hidden!"
         aria-label="Primary"
       >
         {PRIMARY.map(({ to, label, icon: Icon }) => (
