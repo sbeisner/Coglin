@@ -8,7 +8,8 @@
  * offers, not authority.
  */
 import { useCallback, useState } from 'react';
-import { ExternalLink, Plus } from 'lucide-react';
+import { Link } from 'react-router';
+import { ExternalLink, FileText, Plus } from 'lucide-react';
 import * as api from '@/lib/api';
 import { useAsync } from '@/lib/useAsync';
 import { useSession } from '@/lib/session';
@@ -68,14 +69,30 @@ export function OrdersTab({
     (o) => o.status === 'received' || o.status === 'denied' || o.status === 'canceled',
   );
 
+  // The funding request is offered to approvers once there is something
+  // approved to ask the school for — they are the ones who carry it to the
+  // front office. The page itself reads like this tab: open to everyone.
+  const approvedCount = list.filter((o) => o.status === 'approved').length;
+  const offerFunding = canApprove && approvedCount > 0;
+
   return (
     <div className="space-y-6">
-      {canSubmit && (
-        <div className="flex justify-end">
-          <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
-            <Plus className="size-4" aria-hidden />
-            Request a part
-          </Button>
+      {(canSubmit || offerFunding) && (
+        <div className="flex flex-wrap justify-end gap-2">
+          {offerFunding && (
+            <Button asChild size="sm" variant="outline">
+              <Link to="/app/finance/funding-request">
+                <FileText className="size-4" aria-hidden />
+                Funding request
+              </Link>
+            </Button>
+          )}
+          {canSubmit && (
+            <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+              <Plus className="size-4" aria-hidden />
+              Request a part
+            </Button>
+          )}
         </div>
       )}
 

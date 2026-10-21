@@ -20,6 +20,7 @@ import Meetings from '@/routes/Meetings';
 import Meeting from '@/routes/Meeting';
 import Portfolio from '@/routes/Portfolio';
 import Finance from '@/routes/Finance';
+import FundingRequest from '@/routes/FundingRequest';
 import Notes from '@/routes/Notes';
 import Placeholder from '@/routes/Placeholder';
 import Debug from '@/routes/Debug';
@@ -229,6 +230,7 @@ export function App() {
                   element={<Navigate to="/app/meetings?view=calendar" replace />}
                 />
                 <Route path="finance" element={<Finance />} />
+                <Route path="finance/funding-request" element={<FundingRequest />} />
                 {/* The section shipped as Finance; season-old bookmarks say
                     budget. Chains with '/budget' in LEGACY_APP_PATHS below. */}
                 <Route path="budget" element={<Navigate to="/app/finance" replace />} />

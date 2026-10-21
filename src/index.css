@@ -655,3 +655,11 @@
 [data-session-hint='in'] .session-out-only {
   display: none;
 }
+
+/* Paper for the funding request (src/routes/FundingRequest.tsx), the one screen
+   that is meant to be printed. Letter with a margin the office's printer can
+   actually reach; the sheet itself drops its own padding in print. */
+@page {
+  size: letter;
+  margin: 0.6in;
+}
