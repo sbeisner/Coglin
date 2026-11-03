@@ -13,6 +13,7 @@ import { meetings } from './routes/meetings';
 import { meetingNotes } from './routes/notes';
 import { docs } from './routes/docs';
 import { newsletters } from './routes/newsletters';
+import { points } from './routes/points';
 import { records } from './routes/records';
 import { series } from './routes/series';
 import { sponsorship } from './routes/sponsorship';
@@ -106,6 +107,7 @@ app.route('/api/media', media);
 // prefix, so they mount at /api alongside `team`.
 app.route('/api', boards);
 app.route('/api', records);
+app.route('/api', points);
 // Declares full paths ('/newsletters', '/contacts') like boards and records,
 // so it mounts at /api alongside them — and before `team`, whose bare paths
 // would otherwise shadow siblings.
