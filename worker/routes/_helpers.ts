@@ -28,18 +28,27 @@ export const ORIGIN = 'http://coglin.test';
  */
 export async function call(
   path: string,
-  init: RequestInit & { cookie?: string } = {},
+  init: RequestInit & {
+    cookie?: string;
+    /** Per-request binding overrides, for config the suite defaults off. */
+    env?: Partial<Cloudflare.Env>;
+  } = {},
 ): Promise<Response> {
-  const headers = new Headers(init.headers);
+  const { env: overrides, cookie, ...rest } = init;
+  const headers = new Headers(rest.headers);
   headers.set('Origin', ORIGIN);
-  if (init.body && !headers.has('Content-Type')) {
+  if (rest.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  if (init.cookie) headers.set('Cookie', init.cookie);
+  if (cookie) headers.set('Cookie', cookie);
 
-  const request = new Request(`${ORIGIN}${path}`, { ...init, headers });
+  const request = new Request(`${ORIGIN}${path}`, { ...rest, headers });
   const ctx = createExecutionContext();
-  const response = await worker.fetch(request, env, ctx);
+  const response = await worker.fetch(
+    request,
+    overrides ? { ...env, ...overrides } : env,
+    ctx,
+  );
   await waitOnExecutionContext(ctx);
   return response;
 }
@@ -47,7 +56,7 @@ export async function call(
 /** POST/PATCH JSON and parse the response, which is most of what tests do. */
 export async function callJson<T = Record<string, unknown>>(
   path: string,
-  init: RequestInit & { cookie?: string } = {},
+  init: Parameters<typeof call>[1] = {},
 ): Promise<{ status: number; body: T }> {
   const response = await call(path, init);
   const body = (await response.json().catch(() => ({}))) as T;

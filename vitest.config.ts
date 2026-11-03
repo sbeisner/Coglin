@@ -41,6 +41,10 @@ export default defineConfig({
             // real HMAC key that the tests sign fixtures with.
             STRIPE_SECRET_KEY: 'sk_test_coglin',
             STRIPE_WEBHOOK_SECRET: 'whsec_test_coglin',
+            // Live notes (COG-051) OFF by default, overriding wrangler.jsonc's
+            // local "*", so the REST-path suites keep testing the REST path.
+            // noteRoom.test.ts turns it on per request.
+            LIVE_NOTES_TEAMS: '',
           },
         },
       };

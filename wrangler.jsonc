@@ -39,6 +39,20 @@
   ],
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "coglin-media-staging" }],
 
+  // Live note rooms (COG-051): one Durable Object per note document, see
+  // worker/noteRoom.ts. Bindings and migrations are NOT inherited by `env`
+  // blocks, so all three environments repeat them — and the migration tag must
+  // match across them, or a deploy to one tries to create the class twice.
+  // SQLite-backed (new_sqlite_classes), because the room's update log is a table.
+  "durable_objects": {
+    "bindings": [{ "name": "NOTE_ROOMS", "class_name": "NoteRoom" }]
+  },
+  "migrations": [{ "tag": "v1-note-rooms", "new_sqlite_classes": ["NoteRoom"] }],
+
+  // Everyone, locally. The test suite overrides this to off in vitest.config.ts
+  // so the REST-path tests keep exercising the REST path.
+  "vars": { "LIVE_NOTES_TEAMS": "*" },
+
   // Invite mail goes out over Resend's REST API (see worker/lib/email.ts), so
   // there is no send_email binding here — just a RESEND_API_KEY secret per
   // environment. lilithforge.com already sends through Resend for Inkubus;
@@ -82,7 +96,9 @@
         "ENVIRONMENT": "staging",
         "STRIPE_PRODUCT_ID": "prod_VAWjS8LhOV8WNO",
         "SIGNUP_ALERT_TO": "admin@lilithforge.com",
-        "BUG_ALERT_TO": "admin@lilithforge.com"
+        "BUG_ALERT_TO": "admin@lilithforge.com",
+        // Live notes for every team on staging (COG-051).
+        "LIVE_NOTES_TEAMS": "*"
       },
       // Flat, single-level subdomain on purpose. Cloudflare Universal SSL
       // covers *.lilithforge.com but NOT two-level names like
@@ -104,6 +120,12 @@
       ],
       "r2_buckets": [
         { "binding": "MEDIA", "bucket_name": "coglin-media-staging" }
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "NOTE_ROOMS", "class_name": "NoteRoom" }]
+      },
+      "migrations": [
+        { "tag": "v1-note-rooms", "new_sqlite_classes": ["NoteRoom"] }
       ]
     },
 
@@ -137,6 +159,15 @@
         }
       ],
       "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "coglin-media-prod" }],
+
+      // The rooms exist in production from the first deploy, but no team uses
+      // them until LIVE_NOTES_TEAMS names it (unset here = off for everyone).
+      "durable_objects": {
+        "bindings": [{ "name": "NOTE_ROOMS", "class_name": "NoteRoom" }]
+      },
+      "migrations": [
+        { "tag": "v1-note-rooms", "new_sqlite_classes": ["NoteRoom"] }
+      ],
 
       // Nightly D1 -> R2 backup (COG-040). 07:00 UTC is roughly 2-3am Eastern,
       // which is the quietest point for a team that meets on weeknights.

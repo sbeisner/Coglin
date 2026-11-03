@@ -1,8 +1,8 @@
-import Image from '@tiptap/extension-image';
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import type { NodeViewProps } from '@tiptap/react';
 import { useSyncExternalStore } from 'react';
 import { subscribeUploads, uploadState } from '@/components/notes/useDocImages';
+import { MediaImageNode } from '../../../shared/docSchema';
 
 /**
  * A photo in a document, stored as a media id.
@@ -16,42 +16,15 @@ import { subscribeUploads, uploadState } from '@/components/notes/useDocImages';
  * writeDraft in lib/useDocSync.ts — and base64 in `content` would also put image
  * bytes in D1 and therefore in the nightly R2 dump, which worker/backup.test.ts
  * already asserts against. That existing test guards this format for free.
+ *
+ * The schema half lives in shared/docSchema.ts, because the Worker builds live
+ * documents from it; only the React node view is here.
  */
-export const MediaImage = Image.extend({
-  name: 'mediaImage',
-
-  addAttributes() {
-    return {
-      mediaId: {
-        default: null,
-        parseHTML: (element) => element.getAttribute('data-media-id'),
-        renderHTML: (attributes) => {
-          if (!attributes.mediaId) return {};
-          return {
-            'data-media-id': attributes.mediaId,
-            src: `/media/${attributes.mediaId}`,
-          };
-        },
-      },
-      /**
-       * Transient, and never persisted with a value: it is how an in-flight
-       * upload finds its own node again after the student kept typing and the
-       * positions moved. Cleared when the media id arrives.
-       */
-      uploadId: { default: null, renderHTML: () => ({}) },
-      width: { default: null },
-      height: { default: null },
-      alt: {
-        default: '',
-        parseHTML: (element) => element.getAttribute('alt') ?? '',
-      },
-    };
-  },
-
+export const MediaImage = MediaImageNode.extend({
   addNodeView() {
     return ReactNodeViewRenderer(MediaImageView);
   },
-}).configure({ inline: false, allowBase64: false });
+});
 
 function MediaImageView({ node, updateAttributes, editor }: NodeViewProps) {
   const mediaId = node.attrs.mediaId as string | null;
