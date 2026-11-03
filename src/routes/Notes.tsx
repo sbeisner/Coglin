@@ -5,6 +5,7 @@ import * as api from '@/lib/api';
 import { useAsync } from '@/lib/useAsync';
 import { useSession } from '@/lib/session';
 import { clearDraft, readDraft, useDocSync } from '@/lib/useDocSync';
+import { caretColor, useLiveDoc } from '@/lib/useLiveDoc';
 import { toMarkdown } from '@/lib/docText';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -12,6 +13,7 @@ import { Skeleton } from '@/components/Skeleton';
 import { Button } from '@/components/ui/button';
 import { AgendaPanel } from '@/components/meetings/AgendaPanel';
 import { DocTree } from '@/components/notes/DocTree';
+import { LiveIndicator } from '@/components/notes/LiveIndicator';
 import { SaveIndicator } from '@/components/notes/SaveIndicator';
 import { cn } from '@/lib/utils';
 import type { NoteDocSummary } from '@/types';
@@ -234,10 +236,22 @@ function DocPane({
 }) {
   const doc = useAsync(() => api.getDoc(docId), [docId]);
   const [params, setParams] = useSearchParams();
+  const { member } = useSession();
+  /**
+   * Two write paths, one per team setting (COG-051). Both hooks always run —
+   * hooks cannot be conditional — and each is switched off when it is not the
+   * one in charge: useDocSync by its canWrite flag, useLiveDoc by `enabled`.
+   */
+  const isLive = doc.data?.live === true;
   const { state, enqueue, flushNow, setBaseRev, keepMine, discardMine } = useDocSync(
     docId,
-    canEdit,
+    canEdit && !isLive,
   );
+  const live = useLiveDoc(docId, isLive, {
+    memberId: member.id,
+    name: member.display_name,
+    color: caretColor(member.id),
+  });
   const [title, setTitle] = useState('');
   const titleInput = useRef<HTMLInputElement>(null);
   const [draftOffer, setDraftOffer] = useState<string | null>(null);
@@ -313,6 +327,9 @@ function DocPane({
   useEffect(() => {
     if (!doc.data) return;
     setTitle(doc.data.title);
+    // A live page has no rev to track and no local draft to offer: the room is
+    // the save path, and its offline copy merges itself back in.
+    if (doc.data.live) return;
     setBaseRev(doc.data.rev);
     const draft = readDraft(docId);
     if (draft && draft.savedAt > doc.data.updated_at * 1000) {
@@ -507,6 +524,9 @@ function DocPane({
         </div>
       </div>
 
+      {isLive ? (
+        <LiveIndicator status={live.status} peers={live.peers} />
+      ) : (
       <SaveIndicator
         status={state.status}
         savedAt={state.savedAt}
@@ -522,6 +542,7 @@ function DocPane({
           });
         }}
       />
+      )}
 
       {draftOffer !== null && (
         <div
@@ -554,15 +575,32 @@ function DocPane({
       )}
 
       <Suspense fallback={<Skeleton className="h-40" />}>
+        {/* A live page shows the fetched body read-only until the room has
+            synced, then swaps to the shared document. Mounting the live editor
+            before the sync would let ProseMirror invent an empty paragraph and
+            push it into the room — one extra blank line per visitor. */}
         <DocEditor
           docId={docId}
           initialContent={doc.data.content}
-          editable={canEdit}
+          editable={canEdit && (!isLive || (live.ready && live.status !== 'unavailable'))}
           allowFiles
           onChange={onChange}
           onReady={(instance) => {
             editorApi.current = instance;
           }}
+          live={
+            isLive && live.ready && live.session && live.status !== 'unavailable'
+              ? {
+                  doc: live.session.doc,
+                  provider: live.session.provider,
+                  user: {
+                    memberId: member.id,
+                    name: member.display_name,
+                    color: caretColor(member.id),
+                  },
+                }
+              : undefined
+          }
         />
       </Suspense>
     </div>

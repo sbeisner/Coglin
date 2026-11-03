@@ -39,6 +39,8 @@
  * somebody else put on a document has to outlive it.
  */
 import { Hono } from 'hono';
+import { getServerByName } from 'partyserver';
+import { MEMBER_HEADER, READ_ONLY_HEADER, roomName } from '../noteRoom';
 import { nowSeconds, uuid } from '../lib/crypto';
 import { optionalString, readJson } from '../lib/http';
 import { POSITION_GAP, positionBetween } from '../lib/meetings';
@@ -48,6 +50,7 @@ import {
   MAX_SUBTREE,
   MAX_TITLE,
   emptyDoc,
+  liveNotesEnabled,
   parseContent,
 } from '../lib/notes';
 import {
@@ -226,7 +229,11 @@ docs.get('/:docId', requireMember, async (c) => {
     .bind(c.req.param('docId'), teamId)
     .first();
   if (!row) return c.json({ error: 'not_found' }, 404);
-  return c.json({ doc: row });
+  // `live` tells the editor which write path to use. When it is true, `content`
+  // may trail the room by a few seconds and is only for the first paint.
+  return c.json({
+    doc: { ...row, live: liveNotesEnabled(c.env.LIVE_NOTES_TEAMS, teamId) },
+  });
 });
 
 /** The polling seam. One row, so a freshness check is not a document download. */
@@ -240,6 +247,39 @@ docs.get('/:docId/rev', requireMember, async (c) => {
     .first<{ rev: number; updated_at: number }>();
   if (!row) return c.json({ error: 'not_found' }, 404);
   return c.json({ rev: row.rev, updated_at: row.updated_at });
+});
+
+/**
+ * The live connection (COG-051): a WebSocket into the document's NoteRoom.
+ *
+ * Everything the room knows about the caller comes from here. Tenancy is the
+ * usual rule — the room name is built from the session's team, so a doc id from
+ * another team names a room that does not exist rather than one that does — and
+ * the member id and read-only bit ride on headers this route SETS, overwriting
+ * anything the browser sent under the same names.
+ *
+ * sameOriginOnly matters more here than on a POST. Browsers attach cookies to a
+ * cross-site WebSocket handshake and apply no CORS to it, so without the Origin
+ * check any page a student visits could open their notes in the background.
+ */
+docs.get('/:docId/live', sameOriginOnly, requireMember, async (c) => {
+  const { teamId, member } = authOf(c);
+  if (c.req.header('Upgrade')?.toLowerCase() !== 'websocket') {
+    return c.json({ error: 'expected_websocket' }, 426);
+  }
+  if (!liveNotesEnabled(c.env.LIVE_NOTES_TEAMS, teamId)) {
+    return c.json({ error: 'not_live' }, 404);
+  }
+  const docId = c.req.param('docId');
+  if (!(await ownedDoc(c.env.DB, teamId, docId))) {
+    return c.json({ error: 'not_found' }, 404);
+  }
+
+  const request = new Request(c.req.raw);
+  request.headers.set(MEMBER_HEADER, member.id);
+  request.headers.set(READ_ONLY_HEADER, member.role === 'viewer' ? '1' : '0');
+  const room = await getServerByName(c.env.NOTE_ROOMS, roomName(teamId, docId));
+  return room.fetch(request);
 });
 
 // --------------------------------------------------------------------- writing
@@ -395,6 +435,13 @@ docs.put(
     if (!body) return c.json({ error: 'invalid_body' }, 400);
     const { teamId, member } = authOf(c);
     const docId = c.req.param('docId');
+
+    // A live team's notes are written by their NoteRoom, which would fold this
+    // write away on its next save. Refusing it is what keeps a tab from before
+    // the switch from quietly overwriting what everyone typed since.
+    if (liveNotesEnabled(c.env.LIVE_NOTES_TEAMS, teamId)) {
+      return c.json({ error: 'live_doc' }, 409);
+    }
 
     const parsed = parseContent(body.content);
     if ('error' in parsed) {

@@ -785,6 +785,11 @@ export interface NoteDoc {
   updated_by: string | null;
   created_at: number;
   updated_at: number;
+  /**
+   * Edited live through a NoteRoom rather than saved through PUT (COG-051). When
+   * true, `content` is only the first paint and may trail the room by seconds.
+   */
+  live?: boolean;
 }
 
 /**

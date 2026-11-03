@@ -1,10 +1,10 @@
-import { Node } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import type { NodeViewProps } from '@tiptap/react';
 import { useSyncExternalStore } from 'react';
 import { Paperclip } from 'lucide-react';
 import { formatBytes } from '@/lib/format';
 import { subscribeUploads, uploadState } from '@/components/notes/useDocImages';
+import { MediaFileNode } from '../../../shared/docSchema';
 
 /**
  * A CAD file or a PDF in a document, stored as a media id.
@@ -23,49 +23,10 @@ import { subscribeUploads, uploadState } from '@/components/notes/useDocImages';
  * The href is /media/:id and the server sends it back as an attachment with a
  * nosniff, octet-stream, sandboxed CSP response — see the kind === 'file' branch
  * in worker/routes/media.ts for why all four of those are load-bearing.
+ *
+ * The schema half lives in shared/docSchema.ts, next to MediaImage's.
  */
-export const MediaFile = Node.create({
-  name: 'mediaFile',
-  group: 'block',
-  atom: true,
-  draggable: true,
-
-  addAttributes() {
-    return {
-      mediaId: { default: null },
-      /** Transient, exactly as MediaImage's is: how an in-flight upload finds
-       *  its own node again after the writer kept typing. Never persisted. */
-      uploadId: { default: null, renderHTML: () => ({}) },
-      filename: { default: '' },
-      size: { default: null },
-    };
-  },
-
-  parseHTML() {
-    return [{ tag: 'a[data-media-file]' }];
-  },
-
-  /**
-   * A real anchor, so a document rendered without the node view — a paste into
-   * another page, a future read-only view — is still a working download rather
-   * than an empty block.
-   */
-  renderHTML({ HTMLAttributes }) {
-    const { mediaId, filename } = HTMLAttributes as {
-      mediaId?: string;
-      filename?: string;
-    };
-    return [
-      'a',
-      {
-        'data-media-file': '',
-        href: mediaId ? `/media/${mediaId}` : '#',
-        download: filename || '',
-      },
-      filename || 'Attachment',
-    ];
-  },
-
+export const MediaFile = MediaFileNode.extend({
   addNodeView() {
     return ReactNodeViewRenderer(MediaFileView);
   },

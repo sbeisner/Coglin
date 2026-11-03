@@ -5,10 +5,24 @@
  * keeps CI free of a codegen step and keeps the generated
  * worker-configuration.d.ts out of the repo. Keep in sync with wrangler.jsonc.
  */
+import type { NoteRoom } from './noteRoom';
+
 export type Bindings = {
   DB: D1Database;
   MEDIA: R2Bucket;
   ASSETS: Fetcher;
+  /** One Durable Object per live note document — see worker/noteRoom.ts. */
+  NOTE_ROOMS: DurableObjectNamespace<NoteRoom>;
+  /**
+   * Which teams get live co-editing of notes (COG-051): `*` for everyone, or a
+   * comma-separated list of team ids. Unset means nobody, and every note saves
+   * through PUT /api/notes/:id/content exactly as before.
+   *
+   * Config rather than a column because it is a rollout switch, not a product
+   * setting: it exists so staging and then one team can run it before everyone,
+   * and it should be deleted once that is done.
+   */
+  LIVE_NOTES_TEAMS?: string;
   ENVIRONMENT?: string;
   /** Extra entropy for session token hashing. Set as a secret per environment. */
   SESSION_PEPPER?: string;

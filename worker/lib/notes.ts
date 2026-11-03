@@ -190,6 +190,19 @@ export function parseContent(
   return { doc, text: parts.join('').replace(/\s+/g, ' ').trim() };
 }
 
+/**
+ * Whether a team's notes are edited live, through a NoteRoom, rather than saved
+ * through PUT /:id/content. See LIVE_NOTES_TEAMS in worker/types.ts.
+ */
+export function liveNotesEnabled(
+  setting: string | undefined,
+  teamId: string,
+): boolean {
+  if (!setting) return false;
+  const teams = setting.split(',').map((t) => t.trim());
+  return teams.includes('*') || teams.includes(teamId);
+}
+
 /** An empty document, so a freshly created page has somewhere to put the caret. */
 export function emptyDoc(): string {
   return JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] });

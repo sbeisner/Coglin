@@ -163,6 +163,10 @@ app.all('/assets/*', async (c) => {
   return c.text('not_found', 404, { 'Cache-Control': 'no-store' });
 });
 
+// The live note rooms (COG-051). Only reachable through GET /api/notes/:id/live,
+// which does the tenancy check before handing the socket over.
+export { NoteRoom } from './noteRoom';
+
 // Exported as an object rather than the Hono app itself, because the Worker now
 // has a second entry point: the nightly backup cron (COG-040).
 export default {

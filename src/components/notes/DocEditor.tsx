@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { textblockTypeInputRule } from '@tiptap/core';
-import { Heading } from '@tiptap/extension-heading';
-import { TaskItem, TaskList } from '@tiptap/extension-list';
+import Collaboration from '@tiptap/extension-collaboration';
+import CollaborationCaret from '@tiptap/extension-collaboration-caret';
 import { Placeholder } from '@tiptap/extensions';
 import { ImagePlus, Paperclip } from 'lucide-react';
+import type YProvider from 'y-partyserver/provider';
+import type * as Y from 'yjs';
 import { MediaFile } from '@/components/notes/MediaFile';
 import { MediaImage } from '@/components/notes/MediaImage';
 import { useDocImages } from '@/components/notes/useDocImages';
 import { FILE_ACCEPT } from '@/lib/upload';
 import { Button } from '@/components/ui/button';
+import { docSchemaExtensions } from '../../../shared/docSchema';
 
 /**
  * The document editor.
@@ -28,6 +29,11 @@ import { Button } from '@/components/ui/button';
  * numbered list, and Tab/Shift-Tab nest via ListItem's own shortcuts. Storage
  * stays ProseMirror JSON — see migrations/0006 on why not markdown and why not
  * HTML.
+ *
+ * LIVE MODE (COG-051). With `live`, the editor binds to a Yjs document instead of
+ * `initialContent`, and teammates' edits and carets appear as they type. The
+ * schema comes from shared/docSchema.ts either way, because the Worker builds the
+ * live document from that same list.
  */
 
 export function DocEditor({
@@ -38,6 +44,7 @@ export function DocEditor({
   onReady,
   allowFiles = false,
   placeholder = 'Start typing…',
+  live,
 }: {
   docId: string;
   /** ProseMirror JSON as a string. Read ONCE — see the seeding rule below. */
@@ -66,27 +73,45 @@ export function DocEditor({
    * download chip that looks like it works and does not is worse.
    */
   allowFiles?: boolean;
+  /**
+   * Edit together. `initialContent` is ignored when this is set: the document
+   * comes from the room, and seeding it here as well is how paragraphs double.
+   * Only mount with it once the provider has synced — see useLiveDoc.
+   */
+  live?: {
+    doc: Y.Doc;
+    provider: YProvider;
+    /**
+     * Published to teammates as this browser's awareness `user`. The caret
+     * extension REPLACES that field rather than merging into it, so memberId has
+     * to ride along here or the presence chips lose track of who is who.
+     */
+    user: { memberId: string; name: string; color: string };
+  };
 }) {
   const editor = useEditor(
     {
       editable,
       extensions: [
-        StarterKit.configure({
-          // Replaced wholesale by ShiftedHeading below.
-          heading: false,
+        ...docSchemaExtensions({
+          live: Boolean(live),
+          mediaImage: MediaImage,
+          mediaFile: MediaFile,
         }),
-        ShiftedHeading,
         Placeholder.configure({
           placeholder,
         }),
-        MediaImage,
-        MediaFile,
-        TaskList,
-        TaskItem.configure({
-          nested: true,
-        }),
+        ...(live
+          ? [
+              Collaboration.configure({ document: live.doc }),
+              CollaborationCaret.configure({
+                provider: live.provider,
+                user: live.user,
+              }),
+            ]
+          : []),
       ],
-      content: safeParse(initialContent),
+      content: live ? undefined : safeParse(initialContent),
       editorProps: {
         attributes: {
           class:
@@ -99,7 +124,9 @@ export function DocEditor({
     },
     // Keyed on the document so switching pages builds a fresh instance rather
     // than calling setContent, which would destroy the caret and the undo stack.
-    [docId],
+    // The Yjs document is part of the key for the same reason: a new one means a
+    // new connection, and the old binding must not outlive it.
+    [docId, live?.doc],
   );
 
   const { insertImages, insertFiles } = useDocImages(editor);
@@ -214,30 +241,3 @@ function safeParse(content: string): object {
     return { type: 'doc', content: [{ type: 'paragraph' }] };
   }
 }
-
-/**
- * Heading, with the markdown ladder shifted down one rung.
- *
- * A note must not out-rank the page's own h1, so the levels stop at 2 and 3.
- * StarterKit's own rule maps hashes to levels literally, which meant "# " typed
- * nothing at all and cost every writer the same confused minute.
- *
- * So one hash is an h2 and two are an h3. Three clamps to h3 rather than falling
- * through as literal "### " text: there is no h4 to give, and silently swallowing
- * the keystrokes is the very failure this extension exists to fix.
- */
-const ShiftedHeading = Heading.extend({
-  addInputRules() {
-    return [
-      textblockTypeInputRule({
-        find: /^(#{1,3})\s$/,
-        type: this.type,
-        getAttributes: (match) => ({
-          level: Math.min(match[1].length + 1, 3),
-        }),
-      }),
-    ];
-  },
-}).configure({
-  levels: [2, 3],
-});
