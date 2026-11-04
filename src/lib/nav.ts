@@ -3,6 +3,7 @@ import {
   Coins,
   FileText,
   Home,
+  Medal,
   Megaphone,
   MessagesSquare,
   NotebookPen,
@@ -39,6 +40,9 @@ export const NAV: NavItem[] = [
   // means giving one up, and this is the trade.
   { to: '/app/notes', label: 'Notes', icon: NotebookPen, primary: true },
   { to: '/app/roster', label: 'Roster', icon: Users },
+  // Not `primary`: the tab bar's four slots are taken (see above), and the
+  // dashboard's points card is the everyday view of this anyway.
+  { to: '/app/points', label: 'Points', icon: Medal },
   { to: '/app/outreach', label: 'Outreach', icon: Megaphone, stub: true },
   { to: '/app/awards', label: 'Awards', icon: Trophy, stub: true },
   { to: '/app/portfolio', label: 'Portfolio', icon: FileText },

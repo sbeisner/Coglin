@@ -192,6 +192,40 @@ export function AttendancePanel({
     }
   }, [attendance, draft, meetingId, members, onSaved]);
 
+  /**
+   * Students who checked themselves in and have not been confirmed.
+   *
+   * Team points only score marks a coach or mentor recorded (see
+   * worker/routes/points.ts), and `save` above sends only rows that changed, so
+   * a self check-in the coach agrees with is never rewritten and never scores.
+   * This is the explicit "yes, they were here". A row the coach has already
+   * changed in the draft is left out: confirming it would overwrite the edit.
+   */
+  const unconfirmed = attendance.filter(
+    (a) =>
+      a.state === 'present' &&
+      a.recorded_by === a.member_id &&
+      (draft[a.member_id]?.state ?? 'present') === 'present',
+  );
+  const unconfirmedIds = new Set(unconfirmed.map((a) => a.member_id));
+
+  const confirmCheckIns = useCallback(async () => {
+    setPending(true);
+    setError(null);
+    setInvalidMemberId(null);
+    try {
+      await api.putAttendance(
+        meetingId,
+        unconfirmed.map((a) => ({ member_id: a.member_id, state: 'present' as const })),
+      );
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '');
+    } finally {
+      setPending(false);
+    }
+  }, [meetingId, onSaved, unconfirmed]);
+
   const checkInSelf = useCallback(async () => {
     setPending(true);
     setError(null);
@@ -246,7 +280,17 @@ export function AttendancePanel({
         <p className="text-muted-foreground tabular font-mono text-xs">
           {marked} of {members.length} marked
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {unconfirmed.length > 0 && (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={pending}
+              onClick={() => void confirmCheckIns()}
+            >
+              Confirm {unconfirmed.length} check-in{unconfirmed.length === 1 ? '' : 's'}
+            </Button>
+          )}
           {/* Deselecting two people beats tapping fifteen. Notes are left alone:
               this sets dispositions, it does not erase what somebody wrote. */}
           <Button
@@ -286,6 +330,11 @@ export function AttendancePanel({
                 </Avatar>
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {member.display_name}
+                  {unconfirmedIds.has(member.id) && (
+                    <span className="text-muted-foreground ml-2 text-xs">
+                      checked in
+                    </span>
+                  )}
                 </span>
                 <Select
                   value={row.state ?? NONE}

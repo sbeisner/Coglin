@@ -18,6 +18,8 @@ import { StatTile } from '@/components/StatTile';
 import { EvidenceMeter } from '@/components/EvidenceMeter';
 import { MeetingCalendar } from '@/components/meetings/MeetingCalendar';
 import { Skeleton } from '@/components/Skeleton';
+import { EmptyState } from '@/components/EmptyState';
+import { Leaderboard } from '@/components/points/Leaderboard';
 import { useSession } from '@/lib/session';
 import { financeBalance, type AwardKey } from '@/types';
 
@@ -57,6 +59,22 @@ export default function Dashboard() {
     () => (canManage ? api.listActionItems('open') : Promise.resolve([])),
     [canManage],
   );
+
+  /**
+   * Team points, gated at the fetch like coachItems: GET /api/points answers 403
+   * to viewers, and a 403 here would announce a section they are not shown.
+   */
+  const canSeePoints = member.role !== 'viewer';
+  const points = useAsync(
+    () => (canSeePoints ? api.getPoints() : Promise.resolve(null)),
+    [canSeePoints],
+  );
+  const myPoints = points.data?.members.find((m) => m.member_id === member.id);
+  // The top five, plus your own row when you are not in it, so every student
+  // sees where they stand without scrolling a full page.
+  const topFive = points.data?.members.slice(0, 5) ?? [];
+  const pointsRows =
+    myPoints && !topFive.includes(myPoints) ? [...topFive, myPoints] : topFive;
 
   // NOT gated: the summary is readable by every role, viewers included — a
   // sponsor is owed "where did the money go". See worker/routes/finance.ts.
@@ -189,6 +207,46 @@ export default function Dashboard() {
             />
           </div>
         </section>
+
+        {canSeePoints && (
+          <section>
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="u-eyebrow">Team points</h2>
+              <Link
+                to="/app/points"
+                className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+              >
+                Full board & how it works
+              </Link>
+            </div>
+            {points.status === 'loading' && <Skeleton className="h-40" />}
+            {points.data && (
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+                  <StatTile
+                    value={formatCount(points.data.team_total)}
+                    label="Team total"
+                  />
+                  {myPoints && (
+                    <StatTile
+                      value={formatCount(myPoints.total)}
+                      label="Your points"
+                      hint={`#${myPoints.rank} · ${myPoints.streak.current} in a row`}
+                    />
+                  )}
+                </div>
+                {pointsRows.length > 0 ? (
+                  <Leaderboard rows={pointsRows} selfMemberId={member.id} />
+                ) : (
+                  <EmptyState
+                    title="No students on the roster yet."
+                    aside="Points appear once students join and the roll gets taken."
+                  />
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* The money, at dashboard altitude: four figures, no rows. The rows
             live in /app/finance. */}

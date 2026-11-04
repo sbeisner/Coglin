@@ -134,6 +134,72 @@ export interface AttendanceGrid {
   }[];
 }
 
+/**
+ * Team points, derived on every read from attendance, notes, portfolio flags and
+ * outreach. See worker/routes/points.ts for what is published and why, and
+ * worker/lib/points.ts for the rules. Students only; viewers get 403.
+ */
+export type PointsBadge =
+  | 'first_doc'
+  | 'streak_5'
+  | 'streak_10'
+  | 'first_placed'
+  | 'points_100'
+  | 'points_250'
+  | 'points_500';
+
+export interface MemberPoints {
+  member_id: string;
+  display_name: string;
+  rank: number;
+  total: number;
+  breakdown: {
+    attendance: number;
+    streak: number;
+    docs: number;
+    portfolio: number;
+    outreach: number;
+  };
+  streak: { current: number; best: number };
+  badges: PointsBadge[];
+}
+
+export interface PointsBoard {
+  season: { id: string; label: string } | null;
+  team_total: number;
+  members: MemberPoints[];
+}
+
+export const BADGE_LABELS: Record<PointsBadge, string> = {
+  first_doc: 'First writeup',
+  streak_5: '5 in a row',
+  streak_10: '10 in a row',
+  first_placed: 'In the portfolio',
+  points_100: '100 club',
+  points_250: '250 club',
+  points_500: '500 club',
+};
+
+/**
+ * Mirror of POINT_RULES in worker/lib/points.ts, for the "how points work"
+ * panel. Duplicated for the reason lib/roles.ts gives: the client tree is not in
+ * the Worker build. Change one, change both.
+ */
+export const POINT_RULES = {
+  attendance: 10,
+  streakEvery: 5,
+  streakBonus: 15,
+  docMinChars: 200,
+  doc: 5,
+  docLongChars: 1500,
+  docLong: 10,
+  shortlisted: 5,
+  placed: 15,
+  outreachBase: 5,
+  outreachPerHour: 2,
+  outreachCap: 25,
+} as const;
+
 /** open | done | dropped, mirroring ACTION_STATUSES in worker/lib/meetings.ts. */
 export type ActionStatus = 'open' | 'done' | 'dropped';
 

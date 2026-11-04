@@ -38,6 +38,7 @@ import type {
   ActionStatus,
   AgendaItem,
   AttendanceGrid,
+  PointsBoard,
   AttendanceRecord,
   AttendanceState,
   AwardCriterion,
@@ -825,6 +826,11 @@ export function checkInSelf(
 /** The roster's season attendance grid. Coach and mentor only. */
 export function attendanceSummary(): Promise<AttendanceGrid> {
   return get('/api/attendance/summary');
+}
+
+/** The team points board. Everyone but viewers. */
+export function getPoints(): Promise<PointsBoard> {
+  return get('/api/points');
 }
 
 // -------------------------------------------------------------- roster photos

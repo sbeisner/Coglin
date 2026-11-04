@@ -19,6 +19,7 @@ import Outreach from '@/routes/Outreach';
 import Meetings from '@/routes/Meetings';
 import Meeting from '@/routes/Meeting';
 import Portfolio from '@/routes/Portfolio';
+import Points from '@/routes/Points';
 import Finance from '@/routes/Finance';
 import FundingRequest from '@/routes/FundingRequest';
 import Notes from '@/routes/Notes';
@@ -218,6 +219,7 @@ export function App() {
                 <Route path="boards" element={<Boards />} />
                 <Route path="outreach" element={<Outreach />} />
                 <Route path="roster" element={<Roster />} />
+                <Route path="points" element={<Points />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="awards" element={<Placeholder />} />
                 <Route path="portfolio" element={<Portfolio />} />

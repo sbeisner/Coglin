@@ -211,13 +211,20 @@ records.post(
     // and the recorder only. If a coach wrote "leaving early for dentist" and
     // the student then taps "I'm here", the sentence survives — losing it would
     // make the button a way to quietly overwrite the coach.
+    //
+    // Nor does it un-confirm a coach's `present`. Team points (routes/points.ts)
+    // only score marks somebody else recorded, so re-stamping the recorder on a
+    // row that is already present would cost the student the points they had,
+    // for tapping the button they were asked to tap. Already present means
+    // nothing to change.
     await c.env.DB.prepare(
       `INSERT INTO meeting_attendance
          (id, team_id, meeting_id, member_id, state, recorded_by, recorded_at)
        VALUES (?, ?, ?, ?, 'present', ?, ?)
        ON CONFLICT (team_id, meeting_id, member_id) DO UPDATE SET
          state = 'present', recorded_by = excluded.recorded_by,
-         recorded_at = excluded.recorded_at`,
+         recorded_at = excluded.recorded_at
+       WHERE meeting_attendance.state <> 'present'`,
     )
       .bind(uuid(), teamId, meetingId, member.id, member.id, nowSeconds())
       .run();
