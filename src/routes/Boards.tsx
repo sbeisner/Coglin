@@ -10,10 +10,12 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Plus } from 'lucide-react';
+import { Plus, User, Users } from 'lucide-react';
+import { useSearchParams } from 'react-router';
 import * as api from '@/lib/api';
 import { Unauthenticated } from '@/lib/api';
 import { columnTasks, moveOps } from '@/lib/boardOrder';
+import { assignedCountByBoard, inScope, type BoardScope } from '@/lib/boardFilter';
 import { useAsync } from '@/lib/useAsync';
 import { useBoardPoll } from '@/lib/useBoardPoll';
 import { useSession } from '@/lib/session';
@@ -74,6 +76,23 @@ const ERROR_COPY: Record<string, string> = {
 
 const SUB_TEAM_LABEL = new Map(SUB_TEAMS.map((st) => [st.id, st.label]));
 
+type Who = 'all' | 'mine';
+
+const WHO_OPTIONS: { id: Who; label: string; Icon: typeof Users }[] = [
+  { id: 'all', label: 'Everyone', Icon: Users },
+  { id: 'mine', label: 'Mine', Icon: User },
+];
+
+const WHO_KEY = 'coglin:boards-who';
+
+function storedWho(): Who {
+  try {
+    return localStorage.getItem(WHO_KEY) === 'mine' ? 'mine' : 'all';
+  } catch {
+    return 'all';
+  }
+}
+
 export default function Boards() {
   const now = api.now();
   const [reloadKey, setReloadKey] = useState(0);
@@ -94,6 +113,29 @@ export default function Boards() {
   const [newTitle, setNewTitle] = useState('');
   const [rev, setRev] = useState<{ rev: number; count: number } | null>(null);
   const addRef = useRef<HTMLInputElement | null>(null);
+
+  /**
+   * Everyone | Mine, the same URL-first, localStorage-second switch as Roster's
+   * Members | Attendance: a link can carry `?who=mine`, and a student who
+   * always works filtered does not have to re-pick it every visit.
+   */
+  const [params, setParams] = useSearchParams();
+  const who: Who =
+    params.get('who') === 'mine' ? 'mine' : params.has('who') ? 'all' : storedWho();
+  const setWho = useCallback(
+    (next: Who) => {
+      const updated = new URLSearchParams(params);
+      updated.set('who', next);
+      setParams(updated, { replace: true });
+      try {
+        localStorage.setItem(WHO_KEY, next);
+      } catch {
+        // Not being able to remember the preference is not worth an error.
+      }
+    },
+    [params, setParams],
+  );
+  const scope: BoardScope = who === 'mine' ? { memberId: member.id } : null;
 
   useEffect(() => {
     if (allTasks.data) setTasks(allTasks.data);
@@ -125,6 +167,11 @@ export default function Boards() {
   const memberById = useMemo(
     () => new Map((members.data ?? []).map((m) => [m.id, m])),
     [members.data],
+  );
+
+  const mineByBoard = useMemo(
+    () => assignedCountByBoard(tasks, member.id),
+    [tasks, member.id],
   );
 
   const board = boards.data?.find((b) => b.id === boardId) ?? null;
@@ -246,7 +293,9 @@ export default function Boards() {
           board_id: boardId,
           title: trimmed,
           body: null,
-          assignee_member_id: null,
+          // Filtered to Mine, an unassigned card would vanish the moment it
+          // was added. Adding while looking at your own work means it is yours.
+          assignee_member_id: scope ? scope.memberId : null,
           status,
           due_at: null,
           position: (last?.position ?? 0) + 1024,
@@ -344,6 +393,16 @@ export default function Boards() {
                     {SUB_TEAM_LABEL.get(b.sub_team)}
                   </span>
                 )}
+                {/* Filtered to Mine, each tab says how many of your cards it
+                    holds, so finding your work is not a tour of every board. */}
+                {scope && (mineByBoard.get(b.id) ?? 0) > 0 && (
+                  <span
+                    className="tabular bg-muted text-foreground ml-1.5 rounded px-1.5 py-0.5 font-mono text-xs font-normal"
+                    aria-label={`${mineByBoard.get(b.id)} assigned to you`}
+                  >
+                    {mineByBoard.get(b.id)}
+                  </span>
+                )}
                 {b.id === boardId && (
                   <span
                     className="u-bar absolute inset-x-2 -bottom-2 h-[3px]"
@@ -426,124 +485,178 @@ export default function Boards() {
             ))}
           </div>
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            // Announcements describe the OUTCOME, not a grid position — "moved
-            // to In progress" is actionable, "moved to position 2 of 4" is not.
-            accessibility={{
-              announcements: {
-                onDragStart: ({ active }) => `Picked up ${label(tasks, active.id)}.`,
-                onDragOver: ({ active, over }) =>
-                  over
-                    ? `${label(tasks, active.id)} is over ${target(tasks, over.id)}.`
-                    : `${label(tasks, active.id)} is not over a column.`,
-                onDragEnd: ({ active, over }) =>
-                  over
-                    ? `Moved ${label(tasks, active.id)} to ${target(tasks, over.id)}.`
-                    : `${label(tasks, active.id)} was dropped.`,
-                onDragCancel: ({ active }) => `Left ${label(tasks, active.id)} where it was.`,
-              },
-            }}
-          >
-            {/* Horizontal scroll on phones — pit day means one thumb and a
-                narrow screen, not a shrunken desktop grid. */}
-            <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 md:-mx-8 md:px-8 xl:mx-0 xl:grid xl:grid-cols-4 xl:overflow-visible xl:px-0">
-              {TASK_COLUMNS.map((col) => {
-                const items = columnTasks(tasks, boardId, col.id);
-                return (
-                  <Column
-                    key={col.id}
-                    status={col.id}
-                    label={col.label}
-                    ids={items.map((t) => t.id)}
-                    canEdit={canEdit}
-                    onAdd={(status) => {
-                      setAdding(status);
-                      setNewTitle('');
-                    }}
-                  >
-                    {items.map((t) => (
-                      <DraggableTaskCard
-                        key={t.id}
-                        task={t}
-                        assignee={
-                          t.assignee_member_id
-                            ? memberById.get(t.assignee_member_id)
-                            : undefined
-                        }
-                        now={now}
-                        onOpen={(task) => setOpenTaskId(task.id)}
-                      />
-                    ))}
-
-                    {adding === col.id && (
-                      <div className="bg-card border-border rounded-md border p-2">
-                        <Input
-                          ref={addRef}
-                          autoFocus
-                          value={newTitle}
-                          maxLength={200}
-                          placeholder="Mount the chassis"
-                          aria-label={`New task in ${col.label}`}
-                          onChange={(e) => setNewTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              void addTask(col.id, newTitle);
-                            }
-                            if (e.key === 'Escape') setAdding(null);
-                          }}
-                          className="min-h-11 md:min-h-9"
-                        />
-                        <div className="mt-2 flex gap-2">
-                          <Button
-                            size="sm"
-                            disabled={pending || newTitle.trim() === ''}
-                            onClick={() => void addTask(col.id, newTitle)}
-                          >
-                            Add
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setAdding(null)}>
-                            Done
-                          </Button>
-                        </div>
-                      </div>
+          <>
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <div
+                role="radiogroup"
+                aria-label="Show tasks for"
+                className="border-border inline-flex rounded-md border p-0.5"
+              >
+                {WHO_OPTIONS.map(({ id, label: optionLabel, Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={who === id}
+                    onClick={() => setWho(id)}
+                    className={cn(
+                      'focus-visible:ring-ring inline-flex min-h-11 items-center gap-2 rounded px-3 text-sm font-medium focus-visible:ring-2 focus-visible:outline-none md:min-h-9',
+                      who === id ? 'bg-muted text-foreground' : 'text-muted-foreground',
                     )}
-
-                    {/* The first-run prompt lives INSIDE the column rather than
-                        replacing the board, so the drop targets still exist. The
-                        old empty state removed every one of them, which made a
-                        new board a dead end you could not add a card to. */}
-                    {col.id === 'todo' &&
-                      items.length === 0 &&
-                      adding === null &&
-                      tasks.filter((t) => t.board_id === boardId).length === 0 && (
-                        <p className="text-muted-foreground px-2 py-3 text-sm">
-                          Nothing here yet. Coglin approves, but the season does not.
-                        </p>
-                      )}
-                  </Column>
-                );
-              })}
+                  >
+                    <Icon className="size-4" aria-hidden />
+                    {optionLabel}
+                  </button>
+                ))}
+              </div>
+              {scope && (
+                <p className="text-muted-foreground text-sm" aria-live="polite">
+                  Showing only tasks assigned to you.
+                </p>
+              )}
             </div>
-
-            <DragOverlay>
-              {dragging ? (
-                <TaskCard
-                  task={dragging}
-                  assignee={
-                    dragging.assignee_member_id
-                      ? memberById.get(dragging.assignee_member_id)
-                      : undefined
-                  }
-                  now={now}
-                />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              // Announcements describe the OUTCOME, not a grid position — "moved
+              // to In progress" is actionable, "moved to position 2 of 4" is not.
+              accessibility={{
+                announcements: {
+                  onDragStart: ({ active }) => `Picked up ${label(tasks, active.id)}.`,
+                  onDragOver: ({ active, over }) =>
+                    over
+                      ? `${label(tasks, active.id)} is over ${target(tasks, over.id)}.`
+                      : `${label(tasks, active.id)} is not over a column.`,
+                  onDragEnd: ({ active, over }) =>
+                    over
+                      ? `Moved ${label(tasks, active.id)} to ${target(tasks, over.id)}.`
+                      : `${label(tasks, active.id)} was dropped.`,
+                  onDragCancel: ({ active }) => `Left ${label(tasks, active.id)} where it was.`,
+                },
+              }}
+            >
+              {/* Horizontal scroll on phones — pit day means one thumb and a
+                  narrow screen, not a shrunken desktop grid. */}
+              <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 md:-mx-8 md:px-8 xl:mx-0 xl:grid xl:grid-cols-4 xl:overflow-visible xl:px-0">
+                {TASK_COLUMNS.map((col) => {
+                  const items = columnTasks(tasks, boardId, col.id).filter((t) =>
+                    inScope(t, scope),
+                  );
+                  return (
+                    <Column
+                      key={col.id}
+                      status={col.id}
+                      label={col.label}
+                      ids={items.map((t) => t.id)}
+                      canEdit={canEdit}
+                      onAdd={(status) => {
+                        setAdding(status);
+                        setNewTitle('');
+                      }}
+                    >
+                      {items.map((t) => (
+                        <DraggableTaskCard
+                          key={t.id}
+                          task={t}
+                          assignee={
+                            t.assignee_member_id
+                              ? memberById.get(t.assignee_member_id)
+                              : undefined
+                          }
+                          now={now}
+                          onOpen={(task) => setOpenTaskId(task.id)}
+                        />
+                      ))}
+  
+                      {adding === col.id && (
+                        <div className="bg-card border-border rounded-md border p-2">
+                          <Input
+                            ref={addRef}
+                            autoFocus
+                            value={newTitle}
+                            maxLength={200}
+                            placeholder="Mount the chassis"
+                            aria-label={`New task in ${col.label}`}
+                            onChange={(e) => setNewTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void addTask(col.id, newTitle);
+                              }
+                              if (e.key === 'Escape') setAdding(null);
+                            }}
+                            className="min-h-11 md:min-h-9"
+                          />
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              size="sm"
+                              disabled={pending || newTitle.trim() === ''}
+                              onClick={() => void addTask(col.id, newTitle)}
+                            >
+                              Add
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setAdding(null)}>
+                              Done
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+  
+                      {/* The first-run prompt lives INSIDE the column rather than
+                          replacing the board, so the drop targets still exist. The
+                          old empty state removed every one of them, which made a
+                          new board a dead end you could not add a card to. */}
+                      {col.id === 'todo' &&
+                        items.length === 0 &&
+                        adding === null &&
+                        tasks.filter((t) => t.board_id === boardId).length === 0 && (
+                          <p className="text-muted-foreground px-2 py-3 text-sm">
+                            Nothing here yet. Coglin approves, but the season does not.
+                          </p>
+                        )}
+  
+                      {/* Filtered to Mine on a board that has cards, none of them
+                          yours: say so, or the board looks broken rather than
+                          filtered. */}
+                      {scope &&
+                        col.id === 'todo' &&
+                        items.length === 0 &&
+                        adding === null &&
+                        !mineByBoard.has(boardId) &&
+                        tasks.some((t) => t.board_id === boardId) && (
+                          <p className="text-muted-foreground px-2 py-3 text-sm">
+                            Nothing on this board is assigned to you.{' '}
+                            <button
+                              type="button"
+                              className="text-foreground underline underline-offset-2"
+                              onClick={() => setWho('all')}
+                            >
+                              Show everyone’s
+                            </button>
+                          </p>
+                        )}
+                    </Column>
+                  );
+                })}
+              </div>
+  
+              <DragOverlay>
+                {dragging ? (
+                  <TaskCard
+                    task={dragging}
+                    assignee={
+                      dragging.assignee_member_id
+                        ? memberById.get(dragging.assignee_member_id)
+                        : undefined
+                    }
+                    now={now}
+                  />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+          </>
         )}
 
         {error && (
