@@ -32,8 +32,26 @@ export function formatTime(epochSeconds: number): string {
   });
 }
 
+/** Elapsed time in whole days, rounded. For durations ("week 4"), not dates. */
 export function daysBetween(from: number, to: number): number {
   return Math.round((to - from) / DAY);
+}
+
+/**
+ * How many calendar days apart two instants are, in the browser's zone: 0 when
+ * they fall on the same date, whatever the hours.
+ *
+ * Not daysBetween. A due date is stored as local MIDNIGHT of the day it is due
+ * (every date input does `${value}T00:00`), so by 4pm on that day the raw gap is
+ * -0.7 days, which rounds to -1, and the card said "yesterday" about a task due
+ * today. Counting dates instead of hours makes the time of day irrelevant. The
+ * subtraction goes through Date.UTC so a DST change in between cannot leave a
+ * 23- or 25-hour day to round the wrong way (monthGrid's rule, same reason).
+ */
+export function calendarDaysBetween(from: number, to: number): number {
+  const utc = (key: number) =>
+    Date.UTC(Math.floor(key / 10000), Math.floor((key % 10000) / 100) - 1, key % 100);
+  return Math.round((utc(dayKey(to)) - utc(dayKey(from))) / (DAY * 1000));
 }
 
 /**
@@ -41,7 +59,7 @@ export function daysBetween(from: number, to: number): number {
  * operational information, and cute phrasing makes it harder to scan.
  */
 export function relativeDays(epochSeconds: number, now: number): string {
-  const d = daysBetween(now, epochSeconds);
+  const d = calendarDaysBetween(now, epochSeconds);
   if (d === 0) return 'today';
   if (d === 1) return 'tomorrow';
   if (d === -1) return 'yesterday';
@@ -49,8 +67,12 @@ export function relativeDays(epochSeconds: number, now: number): string {
   return `in ${d} days`;
 }
 
+/**
+ * Past due once the due DATE is behind us, not once its midnight is. A task due
+ * today is due today until the day ends, not overdue from 12:00:01am.
+ */
 export function isOverdue(dueAt: number | null, now: number): boolean {
-  return dueAt !== null && dueAt < now;
+  return dueAt !== null && calendarDaysBetween(now, dueAt) < 0;
 }
 
 /** 4.5 → "4.5", 3 → "3". Hours are logged in halves; don't print "3.0". */

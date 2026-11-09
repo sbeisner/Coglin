@@ -8,7 +8,7 @@
 import { useCallback, useState } from 'react';
 import { Plus } from 'lucide-react';
 import * as api from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatDate, isOverdue } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/EmptyState';
@@ -146,7 +146,7 @@ export function NewslettersSection({
             // A date that has passed on something still unsent is the nudge —
             // the only thing a schedule does, since nothing sends itself.
             const overdue =
-              n.status === 'scheduled' && n.scheduled_for !== null && n.scheduled_for < now;
+              n.status === 'scheduled' && isOverdue(n.scheduled_for, now);
             return (
               <li key={n.id} className="flex items-center gap-3 px-4 py-2.5">
                 <div className="min-w-0 flex-1">
