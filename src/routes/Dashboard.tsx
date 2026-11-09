@@ -3,12 +3,13 @@ import { TriangleAlert } from 'lucide-react';
 import * as api from '@/lib/api';
 import { useAsync } from '@/lib/useAsync';
 import {
-  daysBetween,
+  calendarDaysBetween,
   formatCents,
   formatCount,
   formatHours,
   formatLongDate,
   formatTime,
+  isOverdue,
   monthOf,
   relativeDays,
 } from '@/lib/format';
@@ -116,10 +117,14 @@ export default function Dashboard() {
     .find((e) => e.kind === 'deadline' || e.kind === 'qualifier');
 
   const open = tasks.data?.filter((t) => t.status !== 'done') ?? [];
-  const overdue = open.filter((t) => t.due_at !== null && t.due_at < now);
-  const dueThisWeek = open.filter(
-    (t) => t.due_at !== null && t.due_at >= now && daysBetween(now, t.due_at) <= 7,
-  );
+  // Calendar days, not instants: due_at is midnight of the due date, so a task
+  // due today must land in "this week", not "overdue". See calendarDaysBetween.
+  const overdue = open.filter((t) => isOverdue(t.due_at, now));
+  const dueThisWeek = open.filter((t) => {
+    if (t.due_at === null) return false;
+    const d = calendarDaysBetween(now, t.due_at);
+    return d >= 0 && d <= 7;
+  });
 
   const hours = outreach.data?.reduce((s, o) => s + o.hours, 0) ?? 0;
   const people = outreach.data?.reduce((s, o) => s + o.people_reached, 0) ?? 0;
@@ -156,7 +161,7 @@ export default function Dashboard() {
           {nextDeadline ? (
             <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
               <span className="u-display tabular font-mono text-5xl leading-none md:text-6xl">
-                {daysBetween(now, nextDeadline.starts_at)}
+                {calendarDaysBetween(now, nextDeadline.starts_at)}
               </span>
               <span className="u-display pb-1 text-lg md:text-xl">
                 days to {nextDeadline.title.toLowerCase()}

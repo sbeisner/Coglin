@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   addMonths,
+  calendarDaysBetween,
   dayKey,
   formatBytes,
   formatDayName,
   formatMonthTitle,
+  isOverdue,
   monthGrid,
   monthOf,
   monthOfDay,
+  relativeDays,
 } from './format';
 
 /**
@@ -157,5 +160,47 @@ describe('formatBytes', () => {
   it('says nothing rather than something wrong', () => {
     expect(formatBytes(-1)).toBe('');
     expect(formatBytes(Number.NaN)).toBe('');
+  });
+});
+
+describe('due dates', () => {
+  // Built the way every date input stores one — `${value}T00:00`, local
+  // midnight — and with local-time constructors throughout, so these hold in
+  // any TZ the runner happens to have.
+  const at = (y: number, m: number, d: number, h = 0, min = 0) =>
+    Math.floor(new Date(y, m - 1, d, h, min).getTime() / 1000);
+  const dueToday = at(2026, 11, 9);
+
+  it('calls a task due today "today" at any hour of that day', () => {
+    for (const [h, min] of [[0, 0], [9, 0], [16, 53], [23, 59]]) {
+      const now = at(2026, 11, 9, h, min);
+      expect(relativeDays(dueToday, now)).toBe('today');
+      expect(isOverdue(dueToday, now)).toBe(false);
+    }
+  });
+
+  it('calls it "yesterday", and overdue, from the next midnight', () => {
+    const now = at(2026, 11, 10, 0, 1);
+    expect(relativeDays(dueToday, now)).toBe('yesterday');
+    expect(isOverdue(dueToday, now)).toBe(true);
+  });
+
+  it('calls tomorrow "tomorrow" even late at night', () => {
+    expect(relativeDays(at(2026, 11, 10), at(2026, 11, 9, 23, 30))).toBe('tomorrow');
+  });
+
+  it('counts dates, not hours, for events with a time', () => {
+    // 8am today → 9pm tomorrow is 37 hours, which rounds to 2 days.
+    expect(relativeDays(at(2026, 11, 10, 21), at(2026, 11, 9, 8))).toBe('tomorrow');
+  });
+
+  it('is not thrown by a DST change in between', () => {
+    // US DST ends 2026-11-01; in zones without DST this is a plain week.
+    expect(calendarDaysBetween(at(2026, 10, 29, 12), at(2026, 11, 5))).toBe(7);
+    expect(calendarDaysBetween(at(2026, 3, 7, 23), at(2026, 3, 9))).toBe(2);
+  });
+
+  it('treats a missing due date as never overdue', () => {
+    expect(isOverdue(null, at(2026, 11, 9))).toBe(false);
   });
 });
